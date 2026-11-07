@@ -98,16 +98,37 @@ class VictimDashboardGenerator:
         pie_data = [p for p in pie_data if p["value"] > 0]
 
         # 3. Timeline Inflows vs Outflows Data
-        sorted_inflows = sorted(result.inflow_transactions, key=lambda x: x.timestamp)
-        timeline_dates = []
-        timeline_in_amts = []
-        date_in_map: Dict[str, float] = {}
-        for t in sorted_inflows:
-            d_str = t.timestamp.strftime("%d/%m %H:%M")
-            date_in_map[d_str] = date_in_map.get(d_str, 0.0) + t.amount
+        time_bucket_in: Dict[str, float] = defaultdict(float)
+        time_bucket_out: Dict[str, float] = defaultdict(float)
+        time_keys_set = set()
 
-        timeline_points = sorted(date_in_map.keys())
-        timeline_in_series = [date_in_map[p] for p in timeline_points]
+        for t in result.inflow_transactions:
+            fmt_key = t.timestamp.strftime("%d/%m %H:%M")
+            sort_key = t.timestamp.strftime("%Y-%m-%d %H:%M")
+            time_bucket_in[fmt_key] += t.amount
+            time_keys_set.add((sort_key, fmt_key))
+
+        for t in result.matched_outflows:
+            fmt_key = t.timestamp.strftime("%d/%m %H:%M")
+            sort_key = t.timestamp.strftime("%Y-%m-%d %H:%M")
+            time_bucket_out[fmt_key] += t.amount
+            time_keys_set.add((sort_key, fmt_key))
+
+        sorted_time_tuples = sorted(list(time_keys_set), key=lambda x: x[0])
+        timeline_points = [x[1] for x in sorted_time_tuples]
+        timeline_in_series = [round(time_bucket_in[x[1]], 2) for x in sorted_time_tuples]
+        timeline_out_series = [round(time_bucket_out[x[1]], 2) for x in sorted_time_tuples]
+
+        # Cumulative Series over time (Card 2 in Tab 4)
+        cum_in = 0.0
+        cum_out = 0.0
+        timeline_cum_in_series = []
+        timeline_cum_out_series = []
+        for p in timeline_points:
+            cum_in += time_bucket_in[p]
+            cum_out += time_bucket_out[p]
+            timeline_cum_in_series.append(round(cum_in, 2))
+            timeline_cum_out_series.append(round(cum_out, 2))
 
         # 4. Generate AOC Payload for JSON Viewer
         aoc_freeze_targets = []
@@ -156,6 +177,9 @@ class VictimDashboardGenerator:
         pie_data_json = json.dumps(pie_data, ensure_ascii=False)
         timeline_points_json = json.dumps(timeline_points, ensure_ascii=False)
         timeline_in_series_json = json.dumps(timeline_in_series, ensure_ascii=False)
+        timeline_out_series_json = json.dumps(timeline_out_series, ensure_ascii=False)
+        timeline_cum_in_series_json = json.dumps(timeline_cum_in_series, ensure_ascii=False)
+        timeline_cum_out_series_json = json.dumps(timeline_cum_out_series, ensure_ascii=False)
 
         # 6. Tab 6: Transaction Statistics & Behavioral Dynamics (Victim vs Mule)
         in_txs = result.inflow_transactions
@@ -727,7 +751,7 @@ class VictimDashboardGenerator:
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-lg font-bold text-white">ลำดับเวลาการโอนเงินและความเร็วการกวาดเงิน (Timeline & Velocity Dynamics)</h2>
-                        <p class="text-xs text-slate-400">แสดงการโอนเข้าของผู้เสียหายและการสั่งโอนระบายออกอย่างต่อเนื่องตลอดช่วงเวลาการเกิดเหตุ</p>
+                        <p class="text-xs text-slate-400">เปรียบเทียบจังหวะเวลาการโอนเข้าของผู้เสียหายกับการสั่งโอนระบายเงินออกของบัญชีม้าอย่างต่อเนื่อง</p>
                     </div>
                     <div class="flex items-center gap-3">
                         <span class="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-full text-xs font-semibold hidden md:inline-block">
@@ -738,7 +762,51 @@ class VictimDashboardGenerator:
                         </button>
                     </div>
                 </div>
-                <div id="timelineChart" class="w-full h-[450px] chart-container transition-all"></div>
+
+                <!-- Summary Badges for Inflows vs Outflows -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div class="p-3 bg-slate-800/60 rounded-xl border border-sky-500/20">
+                        <div class="text-[11px] text-slate-400">เหยื่อโอนเข้าทั้งหมด (Inflow)</div>
+                        <div class="text-base font-bold text-sky-400 font-mono mt-0.5">฿{result.total_inflow_thb:,.2f}</div>
+                        <div class="text-[10px] text-slate-500">{len(result.inflow_transactions):,} รายการ</div>
+                    </div>
+                    <div class="p-3 bg-slate-800/60 rounded-xl border border-rose-500/20">
+                        <div class="text-[11px] text-slate-400">ม้าโอนระบายออก (Outflow)</div>
+                        <div class="text-base font-bold text-rose-400 font-mono mt-0.5">฿{result.total_matched_outflow_thb:,.2f}</div>
+                        <div class="text-[10px] text-slate-500">{len(result.matched_outflows):,} รายการ</div>
+                    </div>
+                    <div class="p-3 bg-slate-800/60 rounded-xl border border-amber-500/20">
+                        <div class="text-[11px] text-slate-400">เงินค้างรอฟอก (Buffer)</div>
+                        <div class="text-base font-bold text-amber-400 font-mono mt-0.5">฿{result.net_residual_buffer_thb:,.2f}</div>
+                        <div class="text-[10px] text-slate-500">คงเหลือในบัญชีม้าแถว 1</div>
+                    </div>
+                    <div class="p-3 bg-slate-800/60 rounded-xl border border-purple-500/20">
+                        <div class="text-[11px] text-slate-400">ความเร็วระบายเงินเฉลี่ย</div>
+                        <div class="text-base font-bold text-purple-400 font-mono mt-0.5">{result.avg_latency_minutes:.1f} นาที</div>
+                        <div class="text-[10px] text-slate-500">Drain Rate: {result.drain_percentage:.1f}%</div>
+                    </div>
+                </div>
+
+                <div id="timelineChart" class="w-full h-[480px] chart-container transition-all"></div>
+            </div>
+
+            <!-- Card 2: Cumulative Cashflow & Buffer Gap Line Chart -->
+            <div id="card-timeline-cumulative" class="bg-slate-900/90 p-5 rounded-2xl border border-slate-800 shadow-xl flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white">ยอดเงินสะสมและการดูดเงินออกจากบัญชีม้าตามเวลา (Cumulative Cashflow & Drain Dynamics)</h2>
+                        <p class="text-xs text-slate-400">เปรียบเทียบยอดความเสียหายสะสมของผู้เสียหายกับยอดเงินที่ม้ากวาดออกต่อเนื่อง พร้อมช่องว่างเงินค้างรอฟอก (Trapped Buffer Gap)</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-semibold hidden md:inline-block">
+                            Trapped Buffer: ฿{result.net_residual_buffer_thb:,.2f}
+                        </span>
+                        <button onclick="toggleCardFullscreen('card-timeline-cumulative', 'timelineCumChartInstance')" class="fullscreen-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm" title="ขยายเต็มจอสำหรับนำเสนอ">
+                            <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="timelineCumChart" class="w-full h-[480px] chart-container transition-all"></div>
             </div>
         </div>
 
@@ -1032,7 +1100,9 @@ class VictimDashboardGenerator:
                 }} else {{
                     if (window.sankeyChartInstance) window.sankeyChartInstance.resize();
                     if (window.pieChartInstance) window.pieChartInstance.resize();
-                    if (window.timelineChartInstance) window.timelineChartInstance.resize();
+                        if (window.timelineChartInstance) window.timelineChartInstance.resize();
+                    if (window.timelineCumChartInstance) window.timelineCumChartInstance.resize();
+                    if (window.timelineCumChartInstance) window.timelineCumChartInstance.resize();
                     if (window.txBucketChartInstance) window.txBucketChartInstance.resize();
                     if (window.cumFlowChartInstance) window.cumFlowChartInstance.resize();
                 }}
@@ -1131,8 +1201,11 @@ class VictimDashboardGenerator:
                     window.sankeyChartInstance.resize();
                     window.pieChartInstance.resize();
                 }}, 50);
-            }} else if (tabId === 'tab-timeline' && window.timelineChartInstance) {{
-                setTimeout(() => window.timelineChartInstance.resize(), 50);
+            }} else if (tabId === 'tab-timeline') {{
+                setTimeout(() => {{
+                    if (window.timelineChartInstance) window.timelineChartInstance.resize();
+                    if (window.timelineCumChartInstance) window.timelineCumChartInstance.resize();
+                }}, 50);
             }} else if (tabId === 'tab-stats' && window.txBucketChartInstance) {{
                 setTimeout(() => {{
                     window.txBucketChartInstance.resize();
@@ -1267,7 +1340,7 @@ class VictimDashboardGenerator:
                 }});
             }}
 
-            // 3. Timeline Chart
+            // 3. Timeline Chart (Dual Inflow & Matched Outflow Velocity)
             const timelineEl = document.getElementById('timelineChart');
             if (timelineEl) {{
                 const timelineChart = echarts.init(timelineEl);
@@ -1275,11 +1348,29 @@ class VictimDashboardGenerator:
                 timelineChart.setOption({{
                     tooltip: {{
                         trigger: 'axis',
+                        axisPointer: {{ type: 'shadow' }},
                         backgroundColor: '#1e293b',
                         borderColor: '#334155',
-                        textStyle: {{ color: '#f8fafc', fontFamily: 'Sarabun' }}
+                        textStyle: {{ color: '#f8fafc', fontFamily: 'Sarabun' }},
+                        formatter: function(params) {{
+                            let title = '<div class="font-bold text-slate-200 border-b border-slate-700 pb-1 mb-1">⏱️ เวลา: ' + params[0].name + '</div>';
+                            params.forEach(p => {{
+                                let val = p.value || 0;
+                                if (val > 0) {{
+                                    title += '<div class="flex items-center justify-between gap-4 py-0.5">' + 
+                                             '<span>' + p.marker + ' ' + p.seriesName + '</span>' + 
+                                             '<b class="font-mono">฿' + val.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + '</b></div>';
+                                }}
+                            }});
+                            return title;
+                        }}
                     }},
-                    grid: {{ left: '4%', right: '4%', bottom: '8%', top: '10%', containLabel: true }},
+                    legend: {{
+                        data: ['เหยื่อโอนเข้า (Victim Inflow)', 'ม้าระบายออก (Mule Outflow)'],
+                        textStyle: {{ color: '#94a3b8', fontFamily: 'Sarabun' }},
+                        top: '1%'
+                    }},
+                    grid: {{ left: '4%', right: '4%', bottom: '15%', top: '12%', containLabel: true }},
                     xAxis: {{
                         type: 'category',
                         data: {timeline_points_json},
@@ -1288,6 +1379,8 @@ class VictimDashboardGenerator:
                     }},
                     yAxis: {{
                         type: 'value',
+                        name: 'ยอดเงิน (฿)',
+                        nameTextStyle: {{ color: '#94a3b8' }},
                         axisLine: {{ lineStyle: {{ color: '#475569' }} }},
                         splitLine: {{ lineStyle: {{ color: '#1e293b' }} }},
                         axisLabel: {{
@@ -1295,18 +1388,156 @@ class VictimDashboardGenerator:
                             formatter: function(val) {{ return '฿' + (val / 1000) + 'k'; }}
                         }}
                     }},
-                    series: [{{
-                        name: 'Inflow Batch',
-                        type: 'bar',
-                        data: {timeline_in_series_json},
-                        itemStyle: {{
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                {{ offset: 0, color: '#f43f5e' }},
-                                {{ offset: 1, color: '#881337' }}
-                            ]),
-                            borderRadius: [4, 4, 0, 0]
+                    dataZoom: [
+                        {{
+                            type: 'slider',
+                            show: true,
+                            xAxisIndex: [0],
+                            start: 0,
+                            end: 100,
+                            bottom: '2%',
+                            textStyle: {{ color: '#94a3b8' }},
+                            borderColor: '#334155',
+                            fillerColor: 'rgba(56, 189, 248, 0.15)',
+                            handleStyle: {{ color: '#38bdf8' }}
+                        }},
+                        {{
+                            type: 'inside',
+                            xAxisIndex: [0]
                         }}
-                    }}]
+                    ],
+                    series: [
+                        {{
+                            name: 'เหยื่อโอนเข้า (Victim Inflow)',
+                            type: 'bar',
+                            data: {timeline_in_series_json},
+                            itemStyle: {{
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    {{ offset: 0, color: '#38bdf8' }},
+                                    {{ offset: 1, color: '#0284c7' }}
+                                ]),
+                                borderRadius: [4, 4, 0, 0]
+                            }}
+                        }},
+                        {{
+                            name: 'ม้าระบายออก (Mule Outflow)',
+                            type: 'bar',
+                            data: {timeline_out_series_json},
+                            itemStyle: {{
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    {{ offset: 0, color: '#f43f5e' }},
+                                    {{ offset: 1, color: '#be123c' }}
+                                ]),
+                                borderRadius: [4, 4, 0, 0]
+                            }}
+                        }}
+                    ]
+                }});
+            }}
+
+            // 3.1 Timeline Cumulative Flow Chart (Card 2 in Tab 4)
+            const timelineCumEl = document.getElementById('timelineCumChart');
+            if (timelineCumEl) {{
+                const timelineCumChart = echarts.init(timelineCumEl);
+                window.timelineCumChartInstance = timelineCumChart;
+                timelineCumChart.setOption({{
+                    tooltip: {{
+                        trigger: 'axis',
+                        backgroundColor: '#1e293b',
+                        borderColor: '#334155',
+                        textStyle: {{ color: '#f8fafc', fontFamily: 'Sarabun' }},
+                        formatter: function(params) {{
+                            let title = '<div class="font-bold text-slate-200 border-b border-slate-700 pb-1 mb-1">⏱️ เวลา: ' + params[0].name + '</div>';
+                            let inVal = 0;
+                            let outVal = 0;
+                            params.forEach(p => {{
+                                let val = p.value || 0;
+                                if (p.seriesName.includes('เข้าสะสม')) inVal = val;
+                                if (p.seriesName.includes('ออกสะสม')) outVal = val;
+                                title += '<div class="flex items-center justify-between gap-4 py-0.5">' + 
+                                         '<span>' + p.marker + ' ' + p.seriesName + '</span>' + 
+                                         '<b class="font-mono">฿' + val.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + '</b></div>';
+                            }});
+                            let gap = Math.max(0, inVal - outVal);
+                            title += '<div class="border-t border-slate-700 pt-1 mt-1 flex items-center justify-between gap-4 text-amber-400">' +
+                                     '<span>🟡 เงินตกค้างรอฟอก (Buffer Gap):</span>' +
+                                     '<b class="font-mono">฿' + gap.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + '</b></div>';
+                            return title;
+                        }}
+                    }},
+                    legend: {{
+                        data: ['ยอดเงินเข้าสะสม (Cumulative Inflow)', 'ยอดเงินออกสะสม (Cumulative Outflow)'],
+                        textStyle: {{ color: '#94a3b8', fontFamily: 'Sarabun' }},
+                        top: '1%'
+                    }},
+                    grid: {{ left: '4%', right: '4%', bottom: '15%', top: '12%', containLabel: true }},
+                    xAxis: {{
+                        type: 'category',
+                        data: {timeline_points_json},
+                        axisLine: {{ lineStyle: {{ color: '#475569' }} }},
+                        axisLabel: {{ color: '#94a3b8', fontSize: 11 }}
+                    }},
+                    yAxis: {{
+                        type: 'value',
+                        name: 'ยอดสะสมรวม (฿)',
+                        nameTextStyle: {{ color: '#94a3b8' }},
+                        axisLine: {{ lineStyle: {{ color: '#475569' }} }},
+                        splitLine: {{ lineStyle: {{ color: '#1e293b' }} }},
+                        axisLabel: {{
+                            color: '#94a3b8',
+                            formatter: function(val) {{ return '฿' + (val / 1000) + 'k'; }}
+                        }}
+                    }},
+                    dataZoom: [
+                        {{
+                            type: 'slider',
+                            show: true,
+                            xAxisIndex: [0],
+                            start: 0,
+                            end: 100,
+                            bottom: '2%',
+                            textStyle: {{ color: '#94a3b8' }},
+                            borderColor: '#334155',
+                            fillerColor: 'rgba(56, 189, 248, 0.15)',
+                            handleStyle: {{ color: '#38bdf8' }}
+                        }},
+                        {{
+                            type: 'inside',
+                            xAxisIndex: [0]
+                        }}
+                    ],
+                    series: [
+                        {{
+                            name: 'ยอดเงินเข้าสะสม (Cumulative Inflow)',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: {timeline_cum_in_series_json},
+                            lineStyle: {{ width: 3, color: '#38bdf8' }},
+                            itemStyle: {{ color: '#38bdf8' }},
+                            areaStyle: {{
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    {{ offset: 0, color: 'rgba(56, 189, 248, 0.22)' }},
+                                    {{ offset: 1, color: 'rgba(56, 189, 248, 0.01)' }}
+                                ])
+                            }}
+                        }},
+                        {{
+                            name: 'ยอดเงินออกสะสม (Cumulative Outflow)',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: {timeline_cum_out_series_json},
+                            lineStyle: {{ width: 3, color: '#f43f5e' }},
+                            itemStyle: {{ color: '#f43f5e' }},
+                            areaStyle: {{
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    {{ offset: 0, color: 'rgba(244, 63, 94, 0.22)' }},
+                                    {{ offset: 1, color: 'rgba(244, 63, 94, 0.01)' }}
+                                ])
+                            }}
+                        }}
+                    ]
                 }});
             }}
 

@@ -67,11 +67,36 @@ class ForensicDashboardGenerator:
 
         sankey_nodes = [{"name": n} for n in sorted(list(nodes_set))]
 
-        # Build Timeline Scatter Data
+        # Build Timeline Data with Inflow/Outflow Separation & Cumulative Trajectory
+        sorted_txs = sorted(transactions, key=lambda tx: tx.timestamp)
+        timeline_times = []
+        timeline_inflows = []
+        timeline_outflows = []
+        timeline_balances = []
+        timeline_cum_in = []
+        timeline_cum_out = []
         timeline_data = []
-        for tx in transactions:
+
+        c_in = 0.0
+        c_out = 0.0
+
+        for tx in sorted_txs:
             ts = tx.timestamp
-            time_str = f"{ts.hour:02d}:{ts.minute:02d}:{ts.second:02d}"
+            time_str = tx.timestamp.strftime("%d/%m %H:%M:%S")
+            timeline_times.append(time_str)
+
+            in_amt = round(tx.amount, 2) if tx.activity == ActivityType.INFLOW else 0.0
+            out_amt = round(tx.amount, 2) if tx.activity in (ActivityType.OUTFLOW, ActivityType.FEE) else 0.0
+
+            timeline_inflows.append(in_amt)
+            timeline_outflows.append(out_amt)
+            timeline_balances.append(round(tx.balance, 2))
+
+            c_in += in_amt
+            c_out += out_amt
+            timeline_cum_in.append(round(c_in, 2))
+            timeline_cum_out.append(round(c_out, 2))
+
             act_label = "Inflow (เงินเข้า)" if tx.activity == ActivityType.INFLOW else ("Fee (ค่าธรรมเนียม)" if tx.activity == ActivityType.FEE else "Outflow (เงินออก)")
             timeline_data.append({
                 "time": time_str,
@@ -80,6 +105,13 @@ class ForensicDashboardGenerator:
                 "desc": tx.description,
                 "balance": tx.balance,
             })
+
+        timeline_times_json = json.dumps(timeline_times, ensure_ascii=False)
+        timeline_inflows_json = json.dumps(timeline_inflows, ensure_ascii=False)
+        timeline_outflows_json = json.dumps(timeline_outflows, ensure_ascii=False)
+        timeline_balances_json = json.dumps(timeline_balances, ensure_ascii=False)
+        timeline_cum_in_json = json.dumps(timeline_cum_in, ensure_ascii=False)
+        timeline_cum_out_json = json.dumps(timeline_cum_out, ensure_ascii=False)
 
         # Build Force-directed Network Graph
         graph_nodes = [{"id": target_name, "name": target_name, "symbolSize": 50, "category": 0}]
@@ -217,6 +249,52 @@ class ForensicDashboardGenerator:
         body {{ font-family: 'Sarabun', sans-serif; background-color: #0f172a; color: #f8fafc; }}
         .tab-btn.active {{ border-bottom: 3px solid #38bdf8; color: #38bdf8; font-weight: 700; }}
         .faq-pill:hover {{ transform: translateY(-1px); }}
+
+        /* Fullscreen Presentation Styles */
+        :fullscreen, ::backdrop {{
+            background-color: #0b1120 !important;
+        }}
+        :fullscreen {{
+            padding: 1.5rem !important;
+            overflow: auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            box-sizing: border-box !important;
+        }}
+        :fullscreen .chart-container {{
+            flex: 1 1 0% !important;
+            width: 100% !important;
+            min-height: calc(100vh - 120px) !important;
+            height: 100% !important;
+        }}
+
+        /* Fallback CSS Fullscreen Overlay */
+        .fullscreen-active {{
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 99999 !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            padding: 1.5rem !important;
+            background-color: #0b1120 !important;
+            overflow: auto !important;
+            display: flex !important;
+            flex-direction: column !important;
+            box-sizing: border-box !important;
+        }}
+        .fullscreen-active .chart-container {{
+            flex: 1 1 0% !important;
+            width: 100% !important;
+            min-height: calc(100vh - 120px) !important;
+            height: 100% !important;
+        }}
     </style>
 </head>
 <body class="p-6">
@@ -316,24 +394,75 @@ class ForensicDashboardGenerator:
         </div>
 
         <!-- Tab 1: Sankey Flow -->
-        <div id="tab-sankey" class="tab-content bg-slate-800 p-6 rounded-2xl border border-slate-700">
-            <h2 class="text-lg font-bold text-white mb-2">ผังแสดงการไหลเวียนของเงินจากเหยื่อผ่านบัญชีม้าสู่ปลายทาง (Sankey Flow Diagram)</h2>
-            <p class="text-xs text-slate-400 mb-4">แสดงเส้นทางตั้งแต่ผู้เสียหาย/แหล่งเงินเข้า เข้าสู่บัญชีเป้าหมาย และการกระจายตัวไปยังบัญชีแถวที่ 2</p>
-            <div id="chart-sankey" style="width: 100%; height: 500px;"></div>
+        <div id="tab-sankey" class="tab-content bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-white">ผังแสดงการไหลเวียนของเงินจากเหยื่อผ่านบัญชีม้าสู่ปลายทาง (Sankey Flow Diagram)</h2>
+                    <p class="text-xs text-slate-400">แสดงเส้นทางตั้งแต่ผู้เสียหาย/แหล่งเงินเข้า เข้าสู่บัญชีเป้าหมาย และการกระจายตัวไปยังบัญชีแถวที่ 2</p>
+                </div>
+                <button onclick="toggleCardFullscreen('tab-sankey', 'sankeyChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                    <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                </button>
+            </div>
+            <div id="chart-sankey" class="chart-container" style="width: 100%; height: 500px;"></div>
         </div>
 
         <!-- Tab 2: Network Topology -->
-        <div id="tab-network" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700">
-            <h2 class="text-lg font-bold text-white mb-2">โครงข่ายความสัมพันธ์หลายมิติ (Multi-Hop Force-Directed Graph)</h2>
-            <p class="text-xs text-slate-400 mb-4">สามารถคลิกลากจุดเพื่อตรวจสอบศูนย์กลางการรับเงินและการกระจายเงิน</p>
-            <div id="chart-network" style="width: 100%; height: 500px;"></div>
+        <div id="tab-network" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-white">โครงข่ายความสัมพันธ์หลายมิติ (Multi-Hop Force-Directed Graph)</h2>
+                    <p class="text-xs text-slate-400">สามารถคลิกลากจุดเพื่อตรวจสอบศูนย์กลางการรับเงินและการกระจายเงิน</p>
+                </div>
+                <button onclick="toggleCardFullscreen('tab-network', 'networkChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                    <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                </button>
+            </div>
+            <div id="chart-network" class="chart-container" style="width: 100%; height: 500px;"></div>
         </div>
 
-        <!-- Tab 3: Timeline & Velocity -->
-        <div id="tab-timeline" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700">
-            <h2 class="text-lg font-bold text-white mb-2">การกระจายตัวตามช่วงเวลาและยอดเงินคงเหลือ (Temporal Velocity Analysis)</h2>
-            <p class="text-xs text-slate-400 mb-4">ตรวจพบพายุการฟอกเงินและพฤติกรรมดูดเงินออกทันทีหลังจากเงินเข้า</p>
-            <div id="chart-timeline" style="width: 100%; height: 450px;"></div>
+        <!-- Tab 3: Timeline & Velocity (2 Stacked Cards) -->
+        <div id="tab-timeline" class="tab-content hidden space-y-6">
+            <!-- Card 1: Batch Velocity -->
+            <div id="card-timeline-velocity" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white mb-1">การกระจายตัวตามช่วงเวลาและจังหวะการโอนเงิน (Temporal Velocity Analysis)</h2>
+                        <p class="text-xs text-slate-400">เปรียบเทียบขนาดรายการเงินเข้า (Inflow) และเงินออก (Outflow) ในแต่ละช่วงเวลา เพื่อตรวจจับพฤติกรรมการซอยยอด (Structuring)</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-full text-xs font-semibold">
+                            เข้า: ฿{sum(t.amount for t in transactions if t.activity == ActivityType.INFLOW):,.2f}
+                        </span>
+                        <span class="px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full text-xs font-semibold">
+                            ออก: ฿{sum(t.amount for t in transactions if t.activity in (ActivityType.OUTFLOW, ActivityType.FEE)):,.2f}
+                        </span>
+                        <button onclick="toggleCardFullscreen('card-timeline-velocity', 'timelineChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                            <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="chart-timeline" class="chart-container" style="width: 100%; height: 450px;"></div>
+            </div>
+
+            <!-- Card 2: Cumulative Flow & Running Balance -->
+            <div id="card-timeline-cumulative" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white mb-1">ยอดเงินสะสมและยอดเงินคงเหลือในบัญชีตามเวลา (Cumulative Cashflow & Balance Trajectory)</h2>
+                        <p class="text-xs text-slate-400">วิเคราะห์เส้นทางยอดเงินเข้าสะสมเทียบกับยอดเงินออกสะสม และทิศทางยอดคงเหลือ (Running Balance) ตลอดช่วงเวลาของบัญชี</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-semibold">
+                            ยอดคงเหลือล่าสุด: ฿{transactions[-1].balance if transactions else 0:,.2f}
+                        </span>
+                        <button onclick="toggleCardFullscreen('card-timeline-cumulative', 'timelineCumChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                            <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="chart-timeline-cumulative" class="chart-container" style="width: 100%; height: 450px;"></div>
+            </div>
         </div>
 
         <!-- Tab 4: Transactions Table -->
@@ -411,23 +540,33 @@ class ForensicDashboardGenerator:
             <!-- Row 2: Off-ramp Channels & 24-Hour Nocturnal Heatmap -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Channel & Cash-out Split -->
-                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+                <div id="card-analytics-channels" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md flex flex-col">
                     <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-base font-bold text-white">สัดส่วนช่องทางการผันเงินออก (Off-ramp Channel Split)</h3>
-                        <span class="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">ถอนเงินสด / คริปโต</span>
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-base font-bold text-white">สัดส่วนช่องทางการผันเงินออก (Off-ramp Channel Split)</h3>
+                            <span class="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">ถอนเงินสด / คริปโต</span>
+                        </div>
+                        <button onclick="toggleCardFullscreen('card-analytics-channels', 'channelChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                            <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                        </button>
                     </div>
                     <p class="text-xs text-slate-400 mb-4">เปรียบเทียบการถอนเงินสดตู้ ATM (Cardless ATM), สินทรัพย์ดิจิทัล (Crypto OTC/P2P) และการโอนธนาคาร</p>
-                    <div id="chart-channels" style="width: 100%; height: 320px;"></div>
+                    <div id="chart-channels" class="chart-container" style="width: 100%; height: 320px;"></div>
                 </div>
 
                 <!-- 24-Hour Activity Heatmap -->
-                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+                <div id="card-analytics-hourly" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md flex flex-col">
                     <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-base font-bold text-white">ความหนาแน่นธุรกรรมรอบ 24 ชั่วโมง (24-Hour Activity Profile)</h3>
-                        <span class="text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">ยามวิกาล 01:00-06:00</span>
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-base font-bold text-white">ความหนาแน่นธุรกรรมรอบ 24 ชั่วโมง (24-Hour Activity Profile)</h3>
+                            <span class="text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">ยามวิกาล 01:00-06:00</span>
+                        </div>
+                        <button onclick="toggleCardFullscreen('card-analytics-hourly', 'hourlyChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                            <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                        </button>
                     </div>
                     <p class="text-xs text-slate-400 mb-4">ตรวจหาความผิดปกติของเวลาการโอนยามวิกาล ซึ่งขัดกับวิถีชีวิตผู้ประกอบการหรือคนทั่วไป</p>
-                    <div id="chart-hourly" style="width: 100%; height: 320px;"></div>
+                    <div id="chart-hourly" class="chart-container" style="width: 100%; height: 320px;"></div>
                 </div>
             </div>
         </div>
@@ -458,10 +597,10 @@ class ForensicDashboardGenerator:
             hourly_cnts: {json.dumps(hourly_cnts)}
         }};
 
-        let sankeyChart, networkChart, timelineChart, channelChart, hourlyChart;
+        let sankeyChart, networkChart, timelineChart, timelineCumChart, channelChart, hourlyChart;
 
         function initSankey() {{
-            sankeyChart = echarts.init(document.getElementById('chart-sankey'));
+            sankeyChart = echarts.init(document.getElementById('chart-sankey')); window.sankeyChart = sankeyChart;
             sankeyChart.setOption({{
                 tooltip: {{ trigger: 'item', triggerOn: 'mousemove' }},
                 series: [{{
@@ -476,7 +615,7 @@ class ForensicDashboardGenerator:
         }}
 
         function initNetwork() {{
-            networkChart = echarts.init(document.getElementById('chart-network'));
+            networkChart = echarts.init(document.getElementById('chart-network')); window.networkChart = networkChart;
             networkChart.setOption({{
                 tooltip: {{}},
                 series: [{{
@@ -493,29 +632,227 @@ class ForensicDashboardGenerator:
         }}
 
         function initTimeline() {{
-            timelineChart = echarts.init(document.getElementById('chart-timeline'));
-            const times = timelineData.map(d => d.time);
-            const amounts = timelineData.map(d => d.amount);
-            const balances = timelineData.map(d => d.balance);
-
+            timelineChart = echarts.init(document.getElementById('chart-timeline')); window.timelineChart = timelineChart;
             timelineChart.setOption({{
-                tooltip: {{ trigger: 'axis' }},
-                legend: {{ data: ['จำนวนเงินธุรกรรม (฿)', 'ยอดคงเหลือ (฿)'], textStyle: {{ color: '#cbd5e1' }} }},
-                xAxis: {{ type: 'category', data: times, axisLabel: {{ color: '#94a3b8' }} }},
-                yAxis: [
-                    {{ type: 'value', name: 'ธุรกรรม', axisLabel: {{ color: '#94a3b8' }} }},
-                    {{ type: 'value', name: 'ยอดคงเหลือ', axisLabel: {{ color: '#94a3b8' }} }}
+                tooltip: {{
+                    trigger: 'axis',
+                    axisPointer: {{ type: 'shadow' }},
+                    backgroundColor: '#1e293b',
+                    borderColor: '#334155',
+                    textStyle: {{ color: '#f8fafc', fontFamily: 'Sarabun' }},
+                    formatter: function(params) {{
+                        let title = '<div class="font-bold text-slate-200 border-b border-slate-700 pb-1 mb-1">⏱️ เวลา: ' + params[0].name + '</div>';
+                        params.forEach(p => {{
+                            let val = p.value || 0;
+                            if (val > 0) {{
+                                title += '<div class="flex items-center justify-between gap-4 py-0.5">' +
+                                         '<span>' + p.marker + ' ' + p.seriesName + '</span>' +
+                                         '<b class="font-mono">฿' + val.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + '</b></div>';
+                            }}
+                        }});
+                        return title;
+                    }}
+                }},
+                legend: {{
+                    data: ['เงินเข้า (Inflow)', 'เงินออก / โอนระบาย (Outflow)'],
+                    textStyle: {{ color: '#cbd5e1' }},
+                    top: '1%'
+                }},
+                grid: {{ left: '4%', right: '4%', bottom: '15%', top: '12%', containLabel: true }},
+                xAxis: {{
+                    type: 'category',
+                    data: {timeline_times_json},
+                    axisLine: {{ lineStyle: {{ color: '#475569' }} }},
+                    axisLabel: {{ color: '#94a3b8', fontSize: 11 }}
+                }},
+                yAxis: {{
+                    type: 'value',
+                    name: 'ยอดเงินธุรกรรม (฿)',
+                    nameTextStyle: {{ color: '#94a3b8' }},
+                    axisLine: {{ lineStyle: {{ color: '#475569' }} }},
+                    splitLine: {{ lineStyle: {{ color: '#1e293b' }} }},
+                    axisLabel: {{
+                        color: '#94a3b8',
+                        formatter: function(val) {{ return '฿' + (val / 1000) + 'k'; }}
+                    }}
+                }},
+                dataZoom: [
+                    {{
+                        type: 'slider',
+                        show: true,
+                        xAxisIndex: [0],
+                        start: 0,
+                        end: 100,
+                        bottom: '2%',
+                        textStyle: {{ color: '#94a3b8' }},
+                        borderColor: '#334155',
+                        fillerColor: 'rgba(56, 189, 248, 0.15)',
+                        handleStyle: {{ color: '#38bdf8' }}
+                    }},
+                    {{
+                        type: 'inside',
+                        xAxisIndex: [0]
+                    }}
                 ],
                 series: [
-                    {{ name: 'จำนวนเงินธุรกรรม (฿)', type: 'bar', data: amounts, itemStyle: {{ color: '#38bdf8' }} }},
-                    {{ name: 'ยอดคงเหลือ (฿)', type: 'line', yAxisIndex: 1, data: balances, itemStyle: {{ color: '#34d399' }} }}
+                    {{
+                        name: 'เงินเข้า (Inflow)',
+                        type: 'bar',
+                        data: {timeline_inflows_json},
+                        itemStyle: {{
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                {{ offset: 0, color: '#38bdf8' }},
+                                {{ offset: 1, color: '#0284c7' }}
+                            ]),
+                            borderRadius: [4, 4, 0, 0]
+                        }}
+                    }},
+                    {{
+                        name: 'เงินออก / โอนระบาย (Outflow)',
+                        type: 'bar',
+                        data: {timeline_outflows_json},
+                        itemStyle: {{
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                {{ offset: 0, color: '#f43f5e' }},
+                                {{ offset: 1, color: '#be123c' }}
+                            ]),
+                            borderRadius: [4, 4, 0, 0]
+                        }}
+                    }}
                 ]
             }});
+
+            const cumEl = document.getElementById('chart-timeline-cumulative');
+            if (cumEl) {{
+                timelineCumChart = echarts.init(cumEl); window.timelineCumChart = timelineCumChart;
+                timelineCumChart.setOption({{
+                    tooltip: {{
+                        trigger: 'axis',
+                        backgroundColor: '#1e293b',
+                        borderColor: '#334155',
+                        textStyle: {{ color: '#f8fafc', fontFamily: 'Sarabun' }},
+                        formatter: function(params) {{
+                            let title = '<div class="font-bold text-slate-200 border-b border-slate-700 pb-1 mb-1">⏱️ เวลา: ' + params[0].name + '</div>';
+                            let inVal = 0;
+                            let outVal = 0;
+                            params.forEach(p => {{
+                                let val = p.value || 0;
+                                if (p.seriesName.includes('เข้าสะสม')) inVal = val;
+                                if (p.seriesName.includes('ออกสะสม')) outVal = val;
+                                title += '<div class="flex items-center justify-between gap-4 py-0.5">' + 
+                                         '<span>' + p.marker + ' ' + p.seriesName + '</span>' + 
+                                         '<b class="font-mono">฿' + val.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + '</b></div>';
+                            }});
+                            let netGap = Math.max(0, inVal - outVal);
+                            title += '<div class="border-t border-slate-700 pt-1 mt-1 flex items-center justify-between gap-4 text-amber-400">' +
+                                     '<span>🟡 ส่วนต่างสะสม (Inflow - Outflow):</span>' +
+                                     '<b class="font-mono">฿' + netGap.toLocaleString('en-US', {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + '</b></div>';
+                            return title;
+                        }}
+                    }},
+                    legend: {{
+                        data: ['ยอดเงินเข้าสะสม (Cumulative Inflow)', 'ยอดเงินออกสะสม (Cumulative Outflow)', 'ยอดคงเหลือในบัญชี (Running Balance)'],
+                        textStyle: {{ color: '#cbd5e1' }},
+                        top: '1%'
+                    }},
+                    grid: {{ left: '4%', right: '4%', bottom: '15%', top: '12%', containLabel: true }},
+                    xAxis: {{
+                        type: 'category',
+                        data: {timeline_times_json},
+                        axisLine: {{ lineStyle: {{ color: '#475569' }} }},
+                        axisLabel: {{ color: '#94a3b8', fontSize: 11 }}
+                    }},
+                    yAxis: [
+                        {{
+                            type: 'value',
+                            name: 'ยอดสะสม (฿)',
+                            nameTextStyle: {{ color: '#94a3b8' }},
+                            axisLine: {{ lineStyle: {{ color: '#475569' }} }},
+                            splitLine: {{ lineStyle: {{ color: '#1e293b' }} }},
+                            axisLabel: {{
+                                color: '#94a3b8',
+                                formatter: function(val) {{ return '฿' + (val / 1000) + 'k'; }}
+                            }}
+                        }},
+                        {{
+                            type: 'value',
+                            name: 'ยอดคงเหลือ (฿)',
+                            nameTextStyle: {{ color: '#34d399' }},
+                            axisLine: {{ lineStyle: {{ color: '#34d399' }} }},
+                            splitLine: {{ show: false }},
+                            axisLabel: {{
+                                color: '#34d399',
+                                formatter: function(val) {{ return '฿' + (val / 1000) + 'k'; }}
+                            }}
+                        }}
+                    ],
+                    dataZoom: [
+                        {{
+                            type: 'slider',
+                            show: true,
+                            xAxisIndex: [0],
+                            start: 0,
+                            end: 100,
+                            bottom: '2%',
+                            textStyle: {{ color: '#94a3b8' }},
+                            borderColor: '#334155',
+                            fillerColor: 'rgba(56, 189, 248, 0.15)',
+                            handleStyle: {{ color: '#38bdf8' }}
+                        }},
+                        {{
+                            type: 'inside',
+                            xAxisIndex: [0]
+                        }}
+                    ],
+                    series: [
+                        {{
+                            name: 'ยอดเงินเข้าสะสม (Cumulative Inflow)',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: {timeline_cum_in_json},
+                            lineStyle: {{ width: 3, color: '#38bdf8' }},
+                            itemStyle: {{ color: '#38bdf8' }},
+                            areaStyle: {{
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    {{ offset: 0, color: 'rgba(56, 189, 248, 0.22)' }},
+                                    {{ offset: 1, color: 'rgba(56, 189, 248, 0.01)' }}
+                                ])
+                            }}
+                        }},
+                        {{
+                            name: 'ยอดเงินออกสะสม (Cumulative Outflow)',
+                            type: 'line',
+                            smooth: true,
+                            showSymbol: false,
+                            data: {timeline_cum_out_json},
+                            lineStyle: {{ width: 3, color: '#f43f5e' }},
+                            itemStyle: {{ color: '#f43f5e' }},
+                            areaStyle: {{
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    {{ offset: 0, color: 'rgba(244, 63, 94, 0.22)' }},
+                                    {{ offset: 1, color: 'rgba(244, 63, 94, 0.01)' }}
+                                ])
+                            }}
+                        }},
+                        {{
+                            name: 'ยอดคงเหลือในบัญชี (Running Balance)',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            smooth: true,
+                            showSymbol: false,
+                            data: {timeline_balances_json},
+                            lineStyle: {{ width: 2, color: '#34d399', type: 'dashed' }},
+                            itemStyle: {{ color: '#34d399' }}
+                        }}
+                    ]
+                }});
+            }}
         }}
 
         function initAnalyticsCharts() {{
             if (!channelChart) {{
-                channelChart = echarts.init(document.getElementById('chart-channels'));
+                channelChart = echarts.init(document.getElementById('chart-channels')); window.channelChart = channelChart;
                 channelChart.setOption({{
                     tooltip: {{ trigger: 'item', formatter: '{{b}}: ฿{{c}} ({{d}}%)' }},
                     legend: {{ bottom: 0, textStyle: {{ color: '#cbd5e1', fontSize: 11 }} }},
@@ -532,7 +869,7 @@ class ForensicDashboardGenerator:
             }}
 
             if (!hourlyChart) {{
-                hourlyChart = echarts.init(document.getElementById('chart-hourly'));
+                hourlyChart = echarts.init(document.getElementById('chart-hourly')); window.hourlyChart = hourlyChart;
                 // Nocturnal hours 01:00 to 06:00 highlighted in amber/rose
                 const barColors = analyticsData.hourly_hours.map((_, idx) => (idx >= 1 && idx <= 6) ? '#f43f5e' : '#38bdf8');
                 hourlyChart.setOption({{
@@ -612,6 +949,7 @@ class ForensicDashboardGenerator:
             if (tabId === 'tab-timeline') {{
                 if (!timelineChart) initTimeline();
                 timelineChart.resize();
+                if (timelineCumChart) timelineCumChart.resize();
             }}
             if (tabId === 'tab-analytics') {{
                 renderLeaderboard();
@@ -647,8 +985,115 @@ class ForensicDashboardGenerator:
         }}
 
         // Initial setup
+        // Fullscreen Toggle Engine for Overview Dashboard
+        let currentFullscreenEl = null;
+
+        function toggleCardFullscreen(cardId, chartInstanceName) {{
+            const card = document.getElementById(cardId);
+            if (!card) return;
+
+            const isCurrentlyFs = (document.fullscreenElement === card) || card.classList.contains('fullscreen-active');
+
+            if (isCurrentlyFs) {{
+                exitFullscreenMode(card, chartInstanceName);
+            }} else {{
+                enterFullscreenMode(card, chartInstanceName);
+            }}
+        }}
+
+        function enterFullscreenMode(card, chartInstanceName) {{
+            currentFullscreenEl = card;
+            if (card.requestFullscreen) {{
+                card.requestFullscreen().catch(() => {{
+                    card.classList.add('fullscreen-active');
+                    updateFsButtons(true, card);
+                    resizeChart(chartInstanceName);
+                }});
+            }} else {{
+                card.classList.add('fullscreen-active');
+            }}
+            updateFsButtons(true, card);
+            resizeChart(chartInstanceName);
+        }}
+
+        function exitFullscreenMode(card, chartInstanceName) {{
+            if (document.fullscreenElement) {{
+                document.exitFullscreen().catch(() => {{}});
+            }}
+            if (card) {{
+                card.classList.remove('fullscreen-active');
+                updateFsButtons(false, card);
+            }}
+            currentFullscreenEl = null;
+            resizeChart(chartInstanceName);
+        }}
+
+        function resizeChart(chartInstanceName) {{
+            setTimeout(() => {{
+                if (chartInstanceName && window[chartInstanceName]) {{
+                    window[chartInstanceName].resize();
+                }} else {{
+                    if (sankeyChart) sankeyChart.resize();
+                    if (networkChart) networkChart.resize();
+                    if (timelineChart) timelineChart.resize();
+                    if (timelineCumChart) timelineCumChart.resize();
+                    if (channelChart) channelChart.resize();
+                    if (hourlyChart) hourlyChart.resize();
+                }}
+            }}, 100);
+            setTimeout(() => {{
+                if (chartInstanceName && window[chartInstanceName]) {{
+                    window[chartInstanceName].resize();
+                }}
+            }}, 300);
+        }}
+
+        function updateFsButtons(isFs, targetCard) {{
+            if (targetCard) {{
+                const btn = targetCard.querySelector('.fullscreen-btn');
+                if (btn) {{
+                    const icon = btn.querySelector('.fs-icon');
+                    const text = btn.querySelector('.fs-text');
+                    if (isFs) {{
+                        if (icon) icon.innerText = '🗗';
+                        if (text) text.innerText = 'ย่อลง (ESC)';
+                        btn.classList.add('bg-rose-600/30', 'text-rose-300', 'border-rose-500/50');
+                    }} else {{
+                        if (icon) icon.innerText = '⛶';
+                        if (text) text.innerText = 'ขยายเต็มจอ';
+                        btn.classList.remove('bg-rose-600/30', 'text-rose-300', 'border-rose-500/50');
+                    }}
+                }}
+            }}
+        }}
+
+        document.addEventListener('fullscreenchange', () => {{
+            const isFs = !!document.fullscreenElement;
+            if (!isFs && currentFullscreenEl) {{
+                currentFullscreenEl.classList.remove('fullscreen-active');
+                updateFsButtons(false, currentFullscreenEl);
+                currentFullscreenEl = null;
+            }}
+            resizeChart();
+        }});
+
+        document.addEventListener('keydown', (e) => {{
+            if (e.key === 'Escape' && currentFullscreenEl) {{
+                exitFullscreenMode(currentFullscreenEl);
+            }}
+        }});
+
         window.addEventListener('load', () => {{
             initSankey();
+        }});
+
+        window.addEventListener('resize', () => {{
+            if (sankeyChart) sankeyChart.resize();
+            if (networkChart) networkChart.resize();
+            if (timelineChart) timelineChart.resize();
+            if (timelineCumChart) timelineCumChart.resize();
+            if (channelChart) channelChart.resize();
+            if (hourlyChart) hourlyChart.resize();
         }});
     </script>
 </body>
