@@ -200,10 +200,18 @@ class UniversalStatementParser:
     def _detect_header_row(self, lines: List[str]) -> Tuple[int, Dict[str, int]]:
         """
         Finds the header row and maps canonical column names to column indices.
+        Supports both generic formats and official Thai Police Excel/CSV templates (BAY, KBANK, SCB, KTB).
         """
         for i, line in enumerate(lines[:15]):  # Look in first 15 lines
             row = [cell.strip().lower() for cell in next(csv.reader([line]))]
             col_map: Dict[str, int] = {}
+
+            # Check if this row is a Thai Police Template header (template04 BAY, KBANK, SCB, KTB, BBL)
+            if ("deposit" in row and "withdrawal" in row) or ("txdate" in row and "txno" in row):
+                for idx, cell in enumerate(row):
+                    col_map[cell] = idx
+                col_map["_format_type_"] = 1  # Marker for template format
+                return i, col_map
 
             for canonical, aliases in COLUMN_ALIASES.items():
                 for idx, cell in enumerate(row):
@@ -227,6 +235,78 @@ class UniversalStatementParser:
     ) -> Optional[BankTransaction]:
         """Parses a single row using column mapping."""
         row_len = len(row)
+
+        # Handle Police Template format (template04)
+        if col_map.get("_format_type_") == 1:
+            acct_no = row[col_map["accountno"]].strip() if "accountno" in col_map and col_map["accountno"] < row_len else fallback_acct_no
+            acct_name = row[col_map["accountname"]].strip() if "accountname" in col_map and col_map["accountname"] < row_len else fallback_acct_name
+            tx_date = row[col_map["txdate"]].strip() if "txdate" in col_map and col_map["txdate"] < row_len else ""
+            tx_time = row[col_map["txtime"]].strip() if "txtime" in col_map and col_map["txtime"] < row_len else ""
+            dep_str = row[col_map["deposit"]].replace(",", "").strip() if "deposit" in col_map and col_map["deposit"] < row_len else ""
+            wd_str = row[col_map["withdrawal"]].replace(",", "").strip() if "withdrawal" in col_map and col_map["withdrawal"] < row_len else ""
+            bal_str = row[col_map["balance"]].replace(",", "").strip() if "balance" in col_map and col_map["balance"] < row_len else ""
+            from_acct = row[col_map["fromaccountno"]].strip() if "fromaccountno" in col_map and col_map["fromaccountno"] < row_len else ""
+            from_name = row[col_map["fromaccountname"]].strip() if "fromaccountname" in col_map and col_map["fromaccountname"] < row_len else ""
+            from_bank = row[col_map["frombankcode"]].strip() if "frombankcode" in col_map and col_map["frombankcode"] < row_len else ""
+            to_acct = row[col_map["toaccountno"]].strip() if "toaccountno" in col_map and col_map["toaccountno"] < row_len else ""
+            to_name = row[col_map["toaccountname"]].strip() if "toaccountname" in col_map and col_map["toaccountname"] < row_len else ""
+            to_bank = row[col_map["tobankcode"]].strip() if "tobankcode" in col_map and col_map["tobankcode"] < row_len else ""
+            channel = row[col_map["txchannel"]].strip() if "txchannel" in col_map and col_map["txchannel"] < row_len else ""
+            note = row[col_map["note"]].strip() if "note" in col_map and col_map["note"] < row_len else ""
+            desc = row[col_map["txtype"]].strip() if "txtype" in col_map and col_map["txtype"] < row_len else ""
+            if note:
+                desc = f"{desc} {note}".strip()
+
+            try:
+                dep_amt = float(dep_str) if dep_str else 0.0
+            except ValueError:
+                dep_amt = 0.0
+            try:
+                wd_amt = float(wd_str) if wd_str else 0.0
+            except ValueError:
+                wd_amt = 0.0
+            try:
+                bal = float(bal_str) if bal_str else 0.0
+            except ValueError:
+                bal = 0.0
+
+            if dep_amt <= 0.0 and wd_amt <= 0.0:
+                return None
+
+            ts = self._parse_datetime(tx_date, tx_time)
+            tx_id = f"TX-{ts.year:04d}{ts.month:02d}{ts.day:02d}{ts.hour:02d}{ts.minute:02d}{ts.second:02d}-{line_num:05d}"
+
+            if dep_amt > 0:
+                return BankTransaction(
+                    tx_id=tx_id,
+                    account_no=acct_no or fallback_acct_no,
+                    account_name=acct_name or fallback_acct_name,
+                    timestamp=ts,
+                    activity=ActivityType.INFLOW,
+                    channel=channel or "TRANSFER",
+                    amount=dep_amt,
+                    balance=bal,
+                    description=desc,
+                    counterparty_bank=from_bank or None,
+                    counterparty_account=from_acct or None,
+                    counterparty_name=from_name or None,
+                )
+            elif wd_amt > 0:
+                return BankTransaction(
+                    tx_id=tx_id,
+                    account_no=acct_no or fallback_acct_no,
+                    account_name=acct_name or fallback_acct_name,
+                    timestamp=ts,
+                    activity=ActivityType.OUTFLOW,
+                    channel=channel or "TRANSFER",
+                    amount=wd_amt,
+                    balance=bal,
+                    description=desc,
+                    counterparty_bank=to_bank or None,
+                    counterparty_account=to_acct or None,
+                    counterparty_name=to_name or None,
+                )
+            return None
 
         amt_idx = col_map.get("amount", -1)
         raw_amt = row[amt_idx].strip().replace(",", "") if 0 <= amt_idx < row_len else ""

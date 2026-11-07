@@ -32,8 +32,11 @@ Provides rigorous grounding protocols, token-optimized verification gates, and a
    - Every claim of a bug fix, system status, or test result MUST be accompanied by exact file paths, line references, or actual command terminal output.
    - Whenever recording documents or citing files, ALL file references MUST be relative paths (e.g. `output/...`, `src/...`) relative to the project root, NEVER absolute filesystem paths.
 
-5. **The Analysis Markdown Persistence Rule**:
-   - Whenever providing forensic financial analysis, case answers, or victim dispersal findings, persist the comprehensive answer to a dedicated markdown file in `output/` (e.g. `output/victim_<name_slug>_analysis.md`) and cite the relative path in the conversation.
+5. **The Mandatory Dual Output (Markdown + HTML Dashboard) Persistence Rule**:
+   - Whenever providing forensic financial analysis, case answers, or victim dispersal findings, persist BOTH:
+     1. The comprehensive analytical answer to a dedicated Markdown file in `output/` (e.g. `output/victim_<name_slug>_analysis.md`)
+     2. The interactive single-page HTML visual dashboard in `output/` (e.g. `output/victim_<name_slug>_dashboard.html` or `output/dashboard.html`)
+   - Always cite the workspace-relative paths of BOTH files in the conversation.
 
 6. **The Strict On-Demand Rule for Court Dossiers & Freezing Orders (Opt-In Only)**:
    - DO NOT autonomously generate or export Court Dossiers (`*.pdf`, `--output-pdf`, `--output-md`) or AOC 1441 Emergency Freezing Orders (`*.json`, `--output-aoc`).

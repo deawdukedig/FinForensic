@@ -474,6 +474,22 @@ def main() -> None:
             print(f"   Integrity:   {vault.verify_vault_integrity()} (All records tamper-evident)")
             print("=" * 65)
 
+            # Mandatory Dual Output: Markdown Analysis + Interactive HTML Dashboard
+            from src.ui.dashboard_generator import ForensicDashboardGenerator
+            analysis_path = Path("output/statement_analysis.md")
+            analysis_path.parent.mkdir(parents=True, exist_ok=True)
+            analysis_text = dossier_gen.generate_markdown_dossier(report, transactions, vault)
+            analysis_path.write_text(analysis_text, encoding="utf-8")
+            vault.record_action("EXPORT_ANALYSIS_MD", f"Exported statement analysis to {analysis_path}")
+
+            dash_path = Path("output/dashboard.html")
+            dash_path.parent.mkdir(parents=True, exist_ok=True)
+            ForensicDashboardGenerator().generate_html(report, transactions, dash_path.as_posix())
+            vault.record_action("EXPORT_DASHBOARD", f"Exported statement dashboard to {dash_path}")
+
+            print(f"\n📊 Forensic Analysis Markdown: {analysis_path.as_posix()}")
+            print(f"📊 Interactive HTML Dashboard:  {dash_path.as_posix()}")
+
     elif args.command == "generate-dashboard":
         from src.models.transaction import ActivityType
         from src.ingestion.universal_parser import UniversalStatementParser
@@ -703,6 +719,22 @@ def main() -> None:
             print(f"   - {gw['name']} ({gw['entity_id']}): ฿{gw['volume_thb']:,.2f}")
         print("=" * 65)
 
+        # Mandatory Dual Output: Multi-Entity Markdown Analysis + HTML Dashboard
+        from src.dossier.multi_entity_dossier import MultiEntityDossierGenerator
+        from src.ui.multi_entity_dashboard import MultiEntityDashboardGenerator
+        md_path = Path("output/multi_entity_analysis.md")
+        md_path.parent.mkdir(parents=True, exist_ok=True)
+        md_text = MultiEntityDossierGenerator().generate_markdown(tracer)
+        md_path.write_text(md_text, encoding="utf-8")
+
+        dash_path = Path("output/multi_entity_dashboard.html")
+        dash_path.parent.mkdir(parents=True, exist_ok=True)
+        MultiEntityDashboardGenerator().generate_html(tracer, dash_path.as_posix())
+
+        print(f"\n📊 Multi-Entity Analysis MD:   {md_path.as_posix()}")
+        print(f"📊 5-Hop Visual Dashboard:     {dash_path.as_posix()}")
+        print("=" * 65)
+
     elif args.command == "export-multi-entity-dossier":
         # Path imported at top-level
         from src.graph.multi_entity_tracer import MultiEntityTracer
@@ -847,13 +879,13 @@ def main() -> None:
             vault.record_action("EXPORT_AOC", f"Exported AOC freeze payload to {aoc_path}")
             print(f"🚨 AOC 1441 Freeze JSON:       {aoc_path.as_posix()}")
 
-        # Optional HTML Dashboard Export
-        if args.output_dashboard:
-            dash_path = Path(args.output_dashboard)
-            dash_path.parent.mkdir(parents=True, exist_ok=True)
-            tracer.generate_html_dashboard(result, output_html_path=dash_path, case_id=args.case_id, officer=args.officer)
-            vault.record_action("EXPORT_DASHBOARD", f"Exported victim dashboard to {dash_path}")
-            print(f"📊 Interactive HTML Dashboard:  {dash_path.as_posix()}")
+        # Mandatory Dual Output: Always export HTML Dashboard alongside Markdown Analysis
+        dash_path_str = args.output_dashboard or f"output/victim_{slug}_dashboard.html"
+        dash_path = Path(dash_path_str)
+        dash_path.parent.mkdir(parents=True, exist_ok=True)
+        tracer.generate_html_dashboard(result, output_html_path=dash_path, case_id=args.case_id, officer=args.officer)
+        vault.record_action("EXPORT_DASHBOARD", f"Exported victim dashboard to {dash_path}")
+        print(f"📊 Interactive HTML Dashboard:  {dash_path.as_posix()}")
 
         print("=" * 75)
         print("✅ Single-victim flow tracing and beneficiary summary completed successfully.")

@@ -8,12 +8,12 @@
 
 | งานที่ต้องการทำ | คำสั่งหลัก (CLI Command) | ผลลัพธ์ที่ได้ (Output) |
 | :--- | :--- | :--- |
-| **1. แกะรอยเงินเหยื่อเฉพาะราย** | `python -m harness.cli trace-victim --victim "<ชื่อหรือเลขบัญชี>"` | สรุปยอดเงิน, บัญชีรับโอน, ยอดที่ต้องอายัด |
+| **1. แกะรอยเงินเหยื่อเฉพาะราย** | `python -m harness.cli trace-victim --victim "<ชื่อหรือเลขบัญชี>"` | ออก Markdown Report คู่กับ Dashboard HTML เสมอ |
 | **2. สร้างคำสั่งอายัดฉุกเฉิน AOC 1441** | `python -m harness.cli aoc-freeze --statement <ไฟล์.csv>` | `output/aoc_freeze_request.json` |
 | **3. สร้างสำนวนคดีส่งศาล (PDF ไทย)** | `python -m harness.cli export-pdf --statement <ไฟล์.csv>` | `output/court_dossier.pdf` |
 | **4. สร้างแดชบอร์ด Interactive HTML** | `python -m harness.cli generate-dashboard --statement <ไฟล์.csv>` | `output/dashboard.html` |
-| **5. แกะรอยเหยื่อครบวงจร (4 in 1)** | `python -m harness.cli trace-victim --victim "<ชื่อ>" --output-pdf <ไฟล์.pdf> --output-aoc <ไฟล์.json> --output-dashboard <ไฟล์.html>` | ออกทั้ง Report, PDF, JSON อายัด, และ Dashboard |
-| **6. วิเคราะห์เครือข่ายม้า 5 แถว** | `python -m harness.cli analyze-multi-entity` | แผนผังเครือข่าย 5-Hop, บัญชีม้าทุกแถว |
+| **5. แกะรอยเหยื่อครบวงจร (เพิ่ม PDF + AOC)** | `python -m harness.cli trace-victim --victim "<ชื่อ>" --output-pdf <ไฟล์.pdf> --output-aoc <ไฟล์.json>` | ออกทั้ง Report MD, Dashboard HTML, PDF, และ AOC JSON |
+| **6. วิเคราะห์เครือข่ายม้า 5 แถว** | `python -m harness.cli analyze-multi-entity` | แผนผังเครือข่าย 5-Hop พร้อมออก MD และ HTML Dashboard |
 | **7. ซักถามข้อมูลด้วยภาษาไทย (Copilot)** | `python -m harness.cli copilot --query "<คำถามภาษาไทย>"` | คำตอบวิเคราะห์ทันที |
 | **8. ตรวจสอบแฮชและพยานหลักฐาน** | `python -m harness.cli audit-evidence --statement <ไฟล์.csv>` | ยืนยัน SHA-256 Provenance |
 
@@ -23,10 +23,11 @@
 
 เมื่อมีผู้เสียหายมาแจ้งความ และต้องการทราบว่าเงินที่โอนเข้าบัญชีม้าแถวที่ 1 ถูกซอยและโอนต่อไปยังบัญชีใดบ้าง และต้องอายัดเงินเท่าใด:
 
-### คำสั่งแบบรวดเร็ว (Default: แสดงผลบนหน้าจอ + บันทึก Markdown Report):
+### คำสั่งแบบรวดเร็ว (Default: แสดงผลบนหน้าจอ + บันทึก Markdown Report คู่กับ Dashboard HTML เสมอ):
 ```bash
 python -m harness.cli trace-victim --statement input/statement.csv --victim "ภานุวัฒน์"
 ```
+*(ระบบจะสร้างทั้ง `output/victim_panuwat_analysis.md` และ `output/victim_panuwat_dashboard.html` ให้ทันที)*
 
 ### คำสั่งแบบครบวงจร (ออกทั้ง PDF ส่งศาล + JSON ส่งศูนย์ AOC 1441 + หน้าเว็บ Dashboard):
 ```bash
