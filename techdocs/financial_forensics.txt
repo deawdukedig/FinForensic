@@ -1,0 +1,254 @@
+================================================================================
+เอกสารทางเทคนิคฉบับสมบูรณ์: สถาปัตยกรรมระบบวิเคราะห์เส้นทางการเงินรอบด้าน 
+(Enterprise Comprehensive Financial Forensics & Flow Matching Architecture)
+================================================================================
+
+1. บทนำและวัตถุประสงค์ (EXECUTIVE SUMMARY & OBJECTIVE)
+--------------------------------------------------------------------------------
+เป้าหมายของเอกสารฉบับนี้จัดทำขึ้นเพื่อให้สถาปนิกซอฟต์แวร์, Data Engineer และ 
+AI Agent ใช้เป็นแม่แบบ (Blueprint) ในการปรับปรุงระบบวิเคราะห์เส้นทางการเงินเดิม 
+จากเดิมที่อาจใช้วิธีการสุ่มตรวจ (Heuristics / Random Sampling) มาเป็นระบบที่ทำงาน
+ด้วยแบบจำลองทางคณิตศาสตร์ (Mathematical Optimization) ครอบคลุมพฤติกรรมศาสตร์,
+การวิเคราะห์โครงข่ายกราฟ, และข้อกำหนดทางกฎหมายเพื่อรองรับการเป็นพยานหลักฐาน
+
+ปัญหาหลักที่ต้องการแก้:
+- ตรวจจับพฤติกรรม ซอยยอด/กระจายเงิน (Structuring / Smurfing / Layering)
+- การที่เงินก้อนใหญ่ก้อนเดียว (Single Inflow) หรือหลายก้อน (Multiple Inflows)
+  ไหลเข้ามา แล้วถูกแตกออกเป็นรายการย่อยหลายรายการ (Multiple Outflows) ไปยัง
+  ปลายทางต่างๆ ภายในกรอบเวลาที่สั้น
+- ปัญหาเงินรวมขาออกไม่เท่ากับขาเข้า 100% เนื่องจากค่าธรรมเนียม, การเหลือเศษ
+  ติดบัญชี (Buffer Balance), หรือการทบรวมกับเงินคงเดิม
+
+
+2. นิยามปัญหาทางคณิตศาสตร์และวิทยาการคอมพิวเตอร์ (PROBLEM FORMULATION)
+--------------------------------------------------------------------------------
+
+2.1 Subset Sum Problem (SSP) / Knapsack Problem
+    - นิยาม: กำหนดเซตของจำนวนจริง $S = \{x_1, x_2, \dots, x_n\}$ ซึ่งเป็นตัวแทน
+      ของรายการขาออก และเป้าหมาย $T$ ซึ่งเป็นยอดเงินขาเข้า
+    - ความซับซ้อน (Complexity): NP-Complete
+    - ความท้าทาย: เมื่อ $N$ ขยายใหญ่ขึ้น ความเป็นไปได้จะเติบโตแบบ Exponential 
+      ($2^N$) ทำให้การ Brute-force หรือการสุ่มหา (Random Sampling) มีโอกาสตกหล่น 
+      (False Negative) หรือใช้เวลาคำนวณนานเกินไป (Time-limit Exceeded)
+
+2.2 Approximate Subset Sum with Tolerance
+    - ในชีวิตจริง ยอดเงินไม่เคยเท่ากันเป๊ะๆ จึงต้องกำหนดค่าความคลาดเคลื่อน $\epsilon$:
+      $$T - \epsilon_{lower} \le \sum_{i \in S'} x_i \le T + \epsilon_{upper}$$
+    - โดย $S' \subseteq S$ คือดัชนีของรายการขาออกที่ถูกเลือก
+
+2.3 Flow Conservation in Multi-Account Networks
+    - สำหรับโครงข่ายหลายบัญชี (Multi-hop) อัตราการไหลของเงินเข้า-ออก บัญชีตัวกลาง $v$ 
+      ต้องเป็นไปตามสมดุลการไหล (Flow Conservation Law):
+      $$\sum_{u} f(u, v) - \sum_{w} f(v, w) = \Delta B_v$$
+      โดย $\Delta B_v$ คือการเปลี่ยนแปลงของยอดคงเหลือสุทธิ (Net Balance Change) 
+      ในบัญชี $v$ ในช่วงเวลาที่พิจารณา
+
+
+3. การเปรียบเทียบวิธีการคำนวณ (METHODOLOGY EVALUATION)
+--------------------------------------------------------------------------------
+
++----------------------+--------------------------+----------------------------+
+| วิธีการ (Approach)    | ข้อดี (Pros)              | ข้อจำกัด (Cons)             |
++----------------------+--------------------------+----------------------------+
+| 1. Random Sampling   | - เขียนโค้ดง่าย           | - ไม่การันตีความถูกต้อง    |
+|    (Monte Carlo /    | - ไม่ใช้ทรัพยากรเครื่อง    | - โอกาสเกิด False Negative |
+|    Heuristic Random) |   มากในการรันครั้งเดียว   |   สูงมากถ้าชุดข้อมูลใหญ่   |
+|                      |                          | - เกิด Spurious Match ได้  |
++----------------------+--------------------------+----------------------------+
+| 2. Exact Enumeration | - ได้ผลลัพธ์ครบ 100%      | - $O(2^N)$ เติบโตไวมาก    |
+|    (itertools)       | - ไม่ต้องลง Library เสริม| - ใช้ได้เฉพาะ $N \le 20-25$|
++----------------------+--------------------------+----------------------------+
+| 3. Dynamic           | - ให้คำตอบแน่นอน         | - ตัวเลขทศนิยมต้องแปลงเป็น |
+|    Programming (DP)  | - เหมาะกับ Integer       |   จำนวนเต็ม (scale factor) |
+|                      |                          | - Memory บวมถ้า Target สูง |
++----------------------+--------------------------+----------------------------+
+| 4. Mixed-Integer     | - รองรับ Constraints     | - ต้องใช้ Solver (เช่น    |
+|    Linear            |   ซับซ้อนได้ดีเยี่ยม     |   HiGHS, CBC, Gurobi)      |
+|    Programming (MILP)| - รองรับตัวเลขทศนิยม     | - ต้องออกแบบ Objective     |
+|                      | - ทำงานได้ไวบน Scale ใหญ่|   Function ให้รัดกุม       |
++----------------------+--------------------------+----------------------------+
+| 5. Constraint        | - เหมาะมากกับระบบที่มีเงื่อน| - ใช้เวลาเรียนรู้ API ของ   |
+|    Programming (CP)  |   ไขตรรกะและเวลาซับซ้อน  |   OR-Tools พอสมควร         |
+|    (Google OR-Tools) |                          |                            |
++----------------------+--------------------------+----------------------------+
+
+
+4. สถาปัตยกรรม 6 มิติเพื่อระบบตรวจจับระดับ ENTERPRISE FORENSICS
+--------------------------------------------------------------------------------
+
+มิติที่ 1: การกระจายตัวของเงิน (Topological & Flow Dynamics)
+------------------------------------------------------------
+- M-to-N Flow Matching: รองรับกรณีเงินเข้าหลายก้อนจากเหยื่อหลายราย ($M$ Inflows) 
+  มารวมในบัญชีพัก (Aggregator/Mule Account) ก่อนถูกแตกออกไปยังบัญชีปลายทาง ($N$ Outflows)
+  แก้ปัญหาด้วยแบบจำลอง Bipartite Matching หรือ Minimum-Cost Maximum-Flow (MCMF)
+- การจัดการสัดส่วนเงินปนเปื้อน (Tainted Fund Attribution):
+  * First-In, First-Out (FIFO): เงินก้อนแรกที่เข้ามาก่อน ถือว่าถูกระบายออกไปก่อน
+  * Proportional Mixing (Haircut / Pooling Model): คำนวณสัดส่วนตามยอดเงินสะอาดที่มีอยู่เดิม 
+    เช่น เงินเดิม 20%, เงินเข้าต้องสงสัย 80% ทุกทรานแซกชันที่โอนออกจะถูกนับเป็นเงินผิดกฎหมาย 80%
+
+มิติที่ 2: พฤติกรรมศาสตร์และความผิดปกติ (Behavioral & Forensic Signals)
+-----------------------------------------------------------------------
+- Pass-through Velocity & Residence Time:
+  คำนวณระยะเวลาเฉลี่ยที่เงินแช่อยู่ในบัญชี:
+  $$t_{\text{residence}} = t_{\text{outflow}} - t_{\text{inflow}}$$
+  หาก $t_{\text{residence}} < 15 \text{ นาที}$ สำหรับยอดเงินหลักแสน/หลักล้าน ให้เพิ่มค่าน้ำหนักความเสี่ยง
+- Structuring / Smurfing Threshold Avoidance:
+  ตรวจจับรายการที่ตั้งใจโอนต่ำกว่าเกณฑ์การรายงานของ ปปง. (เช่น 1,980,000 บาท หรือ 49,000 บาท)
+- Round Number Clustering:
+  เงินเข้ามีเศษสตางค์ (เช่น เงินชำระค่าสินค้า/เงินกู้) แต่เงินออกแตกเป็นเลขกลมๆ 
+  เช่น 50,000 หรือ 100,000 บาท แสดงถึงพฤติกรรมการถอนเงินสดหรือโอนต่อเพื่อซ่อนยอด
+
+มิติที่ 3: ความสัมพันธ์ระดับโครงข่าย (Graph Analytics & Multi-hop)
+------------------------------------------------------------------
+- Multi-Hop Tracing (การฟอกเงินข้ามทอด):
+  ติดตามเส้นเงินจากบัญชีแถว 1 -> แถว 2 -> แถว 3 -> Crypto Exchange / VASP 
+  โดยใช้โครงสร้าง Graph Database (Node = Account, Edge = Transaction)
+- Shared Identifiers Detection:
+  ตรวจจับ Entity Resolution ถึงแม้ชื่อบัญชีปลายทางจะไม่ซ้ำกัน แต่ใช้ Meta-data ร่วมกัน:
+  * IP Address, Subnet, หรือ IMEI ของอุปกรณ์ในการทำธุรกรรม
+  * ปลายทางบัญชี PromptPay หรือ Crypto Deposit Address เดียวกัน
+
+มิติที่ 4: ความน่าเชื่อถือทางกฎหมายและพยานหลักฐาน (Legal & Admissibility)
+-------------------------------------------------------------------------
+- Explainable AI (XAI) & Mathematical Proof:
+  อัลกอริทึมต้องอธิบายได้ในชั้นศาลด้วยสมการพีชคณิตเชิงเส้น (Linear Constraints) 
+  หลีกเลี่ยงการใช้โมเดล Deep Learning แบบ Blackbox ที่ไม่สามารถบอกเหตุผลการจับคู่ได้
+- Data Provenance & Cryptographic Integrity:
+  สร้าง Cryptographic Hash (SHA-256) ของไฟล์ Statement ตั้งแต่นำเข้า เพื่อยืนยัน
+  ในบันทึกการสอบสวนว่าข้อมูลไม่ถูกแก้ไขดัดแปลง (Chain of Custody)
+
+มิติที่ 5: วิศวกรรมระบบและประสิทธิภาพการประมวลผล (System & Scalability)
+-----------------------------------------------------------------------
+- Sliding Window Partitioning:
+  แบ่งทรานแซกชันออกเป็น Bucket ตามกรอบเวลา (Temporal Buckets) ก่อนส่งเข้า Solver 
+  เพื่อป้องกันการประมวลผลข้อมูลทั้งฐานพร้อมกัน
+- Fallback Strategy & Time-Limit Enforcer:
+  ตั้ง Timeout ให้กับ Solver (เช่น ไม่เกิน 5 วินาทีต่อการคำนวณหนึ่งชุด) 
+  หากไม่ลู่เข้าสู่คำตอบ ให้สลับไปใช้ Greedy / Genetic Algorithm อัตโนมัติ
+
+มิติที่ 6: การทำงานร่วมกับมนุษย์ (Human-in-the-loop & Confidence Scoring)
+-------------------------------------------------------------------------
+- Unified Suspicion Scoring Matrix (0 - 100 คะแนน):
+  $$Score = w_1 \cdot S_{\text{amount}} + w_2 \cdot S_{\text{time}} + w_3 \cdot S_{\text{balance}} + w_4 \cdot S_{\text{network}}$$
+- Interactive UI Support:
+  แสดงผลเป็น Sankey Diagram หรือ Force-directed Graph พร้อมเปิดให้พนักงานสอบสวน
+  สามารถปักหมุด (Pin), บังคับเลือก (Force Match), หรือตัดรายการที่ไม่เกี่ยวข้องออกได้
+
+
+5. โค้ดต้นแบบสำหรับการนำไปปรับใช้ (PRODUCTION PYTHON PIPELINE)
+--------------------------------------------------------------------------------
+โค้ดด้านล่างรวมการกรองเงื่อนไขเวลา, สัดส่วนเงินเหลือ, และตัวแก้สมการ MILP:
+
+```python
+import numpy as np
+import pandas as pd
+from scipy.optimize import milp, LinearConstraint, Bounds
+from typing import Dict, Any, Optional
+
+def match_inflow_to_outflows(
+    inflow_amount: float,
+    inflow_time: pd.Timestamp,
+    df_outflows: pd.DataFrame,
+    max_hours: float = 24.0,
+    tolerance_pct: float = 0.02,     # ยอมรับความคลาดเคลื่อน 2%
+    min_residual: float = 0.0,       # เศษเงินขั้นต่ำที่เหลือติดบัญชี
+    max_residual: float = 1000.0,    # เศษเงินสูงสุดที่ยอมรับได้
+    solver_timeout_sec: float = 5.0
+) -> Optional[Dict[str, Any]]:
+    """
+    จับคู่ยอดเงินเข้า 1 ก้อน กับกลุ่มรายการเงินออกด้วย MILP
+    
+    df_outflows ต้องประกอบด้วยคอลัมน์:
+    - 'tx_id': รหัสธุรกรรม
+    - 'timestamp': วันเวลาที่ทำธุรกรรม (pd.Timestamp)
+    - 'amount': จำนวนเงิน (float)
+    """
+    # 1. Temporal Constraint Filtering
+    time_limit = inflow_time + pd.Timedelta(hours=max_hours)
+    candidates = df_outflows[
+        (df_outflows['timestamp'] >= inflow_time) & 
+        (df_outflows['timestamp'] <= time_limit)
+    ].copy()
+    
+    if candidates.empty:
+        return {"status": "NO_CANDIDATES", "message": "ไม่พบรายการเงินออกหลังเงินเข้า"}
+    
+    n = len(candidates)
+    outflow_values = candidates['amount'].values.astype(float)
+    
+    # 2. คำนวณช่วงขอบเขต (Lower Bound / Upper Bound)
+    base_tolerance = inflow_amount * tolerance_pct
+    lb = max(0.0, inflow_amount - base_tolerance - max_residual)
+    ub = inflow_amount + base_tolerance - min_residual
+    
+    # 3. กำหนดตัวแบบ Linear Constraint
+    # lb <= sum(x_i * amount_i) <= ub
+    constraints = LinearConstraint(
+        A=outflow_values.reshape(1, -1),
+        lb=lb,
+        ub=ub
+    )
+    
+    # Objective: Minimize จำนวนรายการที่เลือก (เพื่อหาโครงสร้างการกระจายที่กะทัดรัดที่สุด)
+    c = np.ones(n)
+    integrality = np.ones(n)  # 1 = binary/integer (x_i in {0, 1})
+    bounds = Bounds(0, 1)
+    
+    # 4. ประมวลผลด้วย Solver
+    res = milp(
+        c=c, 
+        integrality=integrality, 
+        constraints=constraints, 
+        bounds=bounds,
+        options={"time_limit": solver_timeout_sec}
+    )
+    
+    if res.success:
+        selected_mask = res.x > 0.5
+        matched_df = candidates[selected_mask]
+        matched_sum = float(matched_df['amount'].sum())
+        discrepancy = inflow_amount - matched_sum
+        
+        # คำนวณ Residence Time เฉลี่ย
+        time_diffs = (matched_df['timestamp'] - inflow_time).dt.total_seconds() / 60.0
+        avg_velocity_minutes = float(time_diffs.mean())
+        
+        return {
+            "status": "MATCH_FOUND",
+            "inflow_target": inflow_amount,
+            "matched_total": matched_sum,
+            "difference": discrepancy,
+            "matched_count": int(len(matched_df)),
+            "avg_latency_minutes": round(avg_velocity_minutes, 2),
+            "matched_transactions": matched_df[['tx_id', 'timestamp', 'amount']]
+        }
+    else:
+        return {
+            "status": "NO_MATCH",
+            "message": "ไม่พบกลุ่มตัวเลขที่สอดคล้องตามเงื่อนไขทางคณิตศาสตร์"
+        }
+```
+
+
+6. แนวทางการสนทนาและสั่งงาน AI AGENT (PROMPT BLUEPRINT FOR AGENT)
+--------------------------------------------------------------------------------
+คัดลอกส่วนนี้ไปใช้งานเพื่อมอบหมายงานให้ AI Agent ของคุณปรับปรุงระบบ:
+
+1. "ระบบเดิมของเรามีการทำงานเป็นแบบ Static Query หรือ Random Sampling 
+   ช่วยออกแบบ Refactor แผนการทำงาน ให้ดึงส่วนแกนประมวลผลเปลี่ยนมาใช้ `scipy.optimize.milp` 
+   ตามตัวอย่างในเอกสาร โดยแยก Service ออกมาเป็น `FlowMatchingEngine`"
+
+2. "ช่วยออกแบบ Data Pipeline สำหรับทำ Partition ข้อมูล Statement ตาม `account_id` 
+   และสร้าง Temporal Windows เพื่อป้องกันปัญหา Memory โอเวอร์โหลดเมื่อต้องรันพร้อมกัน 
+   100,000 รายการ"
+
+3. "โปรดช่วยสร้างสูตรคำนวณ `Suspicion_Score` (0-100) โดยนำตัวแปร 4 ตัวมารวมกัน: 
+   - ผลต่างยอดเงิน (Delta Amount)
+   - ระยะเวลาการระบายเงิน (Pass-through Latency)
+   - ยอดคงเหลือก่อนหน้า (Pre-transaction Balance)
+   - ความถี่ของเลขกลม (Round Number Frequency)"
+
+4. "ช่วยร่างโครงสร้างตารางฐานข้อมูลและ Cypher Query ของ Neo4j ในการเชื่อมโยง
+   ทรานแซกชันที่ผ่านการทำ Flow Matching แล้ว เพื่อให้สามารถ Query ดูเส้นเงินแบบ 
+   Multi-hop (กระโดดข้ามบัญชี 3-5 ทอด) ได้อย่างมีประสิทธิภาพ"
+================================================================================

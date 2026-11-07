@@ -1,0 +1,14 @@
+﻿entity_id,entity_name,role,risk_category,kyc_status,declared_income,flagged_aml
+ENT_VIC_01,นางวิภา สุขสวัสดิ์,Victim (ข้าราชการเกษียณ),Low,Verified,45000,0
+ENT_VIC_02,นายสมศักดิ์ รัตนวิบูลย์,Victim (นักธุรกิจ SME),Low,Verified,120000,0
+ENT_VIC_03,น.ส.อารียา โพธิ์ทอง,Victim (พนักงานบริษัท),Low,Verified,32000,0
+ENT_VIC_04,นายชูเกียรติ มั่นคง,Victim (ฟรีแลนซ์),Low,Verified,28000,0
+ENT_M1_01,นายเดชา คำสอน,Mule Tier-1 (Gate Mule),Critical,Mule_Watchlist,15000,1
+ENT_M1_02,น.ส.วรรณา บุญศรี,Mule Tier-1 (Gate Mule),Critical,Mule_Watchlist,14000,1
+ENT_M1_03,นายมานพ แซ่ลี้,Mule Tier-1 (Gate Mule),Critical,Mule_Watchlist,18000,1
+ENT_M2_01,นายเกรียงไกร ชัยชนะ,Mule Tier-2 (Layering Hub),Critical,High_Risk,20000,1
+ENT_M2_02,น.ส.สุภาพร ศรีเมือง,Mule Tier-2 (Layering Hub),Critical,High_Risk,22000,1
+ENT_M3_01,นายอำนาจ มีเดช,Mule Tier-3 (Consolidation),Critical,Watchlist_Tier3,15000,1
+ENT_RUN_01,นายเบิร์ด (ม้ากดเงินสด ชายแดน),Cash Runner (ATM Dispenser),Critical,Unverified_Cardless,0,1
+ENT_OTC_01,ร้านโชคดี P2P Digital Exchange,Crypto OTC Broker (Off-Ramp),High,Foreign_Escrow,5000000,1
+ENT_BOSS_01,Syndicate Cold Wallet 0x8F9...1A,Syndicate Treasury (Offshore Vault),Sanctioned,Non_KYC_Crypto,0,1

@@ -1,0 +1,661 @@
+"""
+Interactive Tri-Modal Forensic Visual Dashboard Generator.
+Renders standalone HTML dashboards with Apache ECharts and Tailwind CSS,
+supporting 5 specialized forensic tabs:
+1. ผังการกระจายเงิน (Sankey Flow)
+2. กราฟโครงข่ายเชื่อมโยง (Network Topology)
+3. เส้นเวลาและความเร็ว (Timeline & Velocity)
+4. รายการธุรกรรมเชิงลึก (Transactions)
+5. สถิติเชิงลึกและการวิเคราะห์ข้อมูล (Forensic Data Analytics & FAQ Engine)
+"""
+
+from __future__ import annotations
+import json
+from pathlib import Path
+from collections import defaultdict
+from typing import List, Dict, Any, Union
+from src.models.transaction import BankTransaction, ActivityType
+from src.models.dossier import SuspicionReport
+
+
+class ForensicDashboardGenerator:
+    """
+    Assembles self-contained interactive visual dashboards for investigators.
+    """
+
+    def generate_html(
+        self,
+        report: SuspicionReport,
+        transactions: List[BankTransaction],
+        output_file_path: Union[str, Path],
+    ) -> str:
+        """
+        Builds and saves the interactive HTML dashboard.
+        """
+        out_p = Path(output_file_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+
+        inflows = [t for t in transactions if t.activity == ActivityType.INFLOW and not t.is_reversal]
+        outflows = [t for t in transactions if t.activity == ActivityType.OUTFLOW and not t.is_reversal]
+        fees = [t for t in transactions if t.activity == ActivityType.FEE]
+
+        total_in = sum(t.amount for t in inflows)
+        total_out = sum(t.amount for t in outflows)
+        total_fee = sum(t.amount for t in fees)
+        drain_rate = ((total_out + total_fee) / total_in * 100.0) if total_in > 0 else 0.0
+
+        # Build Sankey Data
+        target_name = f"{report.account_name} ({report.account_no_masked})"
+        nodes_set = {target_name}
+        links = []
+
+        # Top inflows into Target
+        for tx in sorted(inflows, key=lambda x: x.amount, reverse=True)[:8]:
+            src_name = f"{tx.counterparty_name or 'ผู้เสียหาย/แหล่งเงิน'} ({tx.counterparty_bank or 'N/A'})"
+            nodes_set.add(src_name)
+            links.append({"source": src_name, "target": target_name, "value": round(tx.amount, 2)})
+
+        # Outflows from Target to Recipients
+        cp_out_vol: Dict[str, float] = {}
+        for tx in outflows:
+            dst = f"{tx.counterparty_name or 'ผู้รับโอน'} ({tx.counterparty_bank or 'N/A'})"
+            cp_out_vol[dst] = cp_out_vol.get(dst, 0.0) + tx.amount
+
+        for dst, vol in sorted(cp_out_vol.items(), key=lambda x: x[1], reverse=True)[:8]:
+            nodes_set.add(dst)
+            links.append({"source": target_name, "target": dst, "value": round(vol, 2)})
+
+        sankey_nodes = [{"name": n} for n in sorted(list(nodes_set))]
+
+        # Build Timeline Scatter Data
+        timeline_data = []
+        for tx in transactions:
+            ts = tx.timestamp
+            time_str = f"{ts.hour:02d}:{ts.minute:02d}:{ts.second:02d}"
+            act_label = "Inflow (เงินเข้า)" if tx.activity == ActivityType.INFLOW else ("Fee (ค่าธรรมเนียม)" if tx.activity == ActivityType.FEE else "Outflow (เงินออก)")
+            timeline_data.append({
+                "time": time_str,
+                "amount": tx.amount,
+                "activity": act_label,
+                "desc": tx.description,
+                "balance": tx.balance,
+            })
+
+        # Build Force-directed Network Graph
+        graph_nodes = [{"id": target_name, "name": target_name, "symbolSize": 50, "category": 0}]
+        graph_links = []
+        for l in links:
+            is_in = (l["target"] == target_name)
+            other = l["source"] if is_in else l["target"]
+            graph_nodes.append({
+                "id": other,
+                "name": other,
+                "symbolSize": max(20, min(45, int(l["value"] / 10000))),
+                "category": 1 if is_in else 2,
+            })
+            graph_links.append({
+                "source": l["source"],
+                "target": l["target"],
+                "value": l["value"],
+            })
+
+        # Remove duplicate graph nodes by id
+        unique_graph_nodes = []
+        seen_ids = set()
+        for gn in graph_nodes:
+            if gn["id"] not in seen_ids:
+                seen_ids.add(gn["id"])
+                unique_graph_nodes.append(gn)
+
+        # ----------------------------------------------------
+        # Extended Analytics Data (Section 12 Upgrade Plan)
+        # ----------------------------------------------------
+        # 1. Top Inflows (up to 20)
+        top_inflows_20 = [
+            {
+                "time": t.timestamp.strftime("%H:%M:%S"),
+                "party": t.counterparty_name or "ผู้โอนเข้า",
+                "channel": f"{t.counterparty_bank or 'N/A'} {t.counterparty_account or ''}".strip(),
+                "detail": t.description or "-",
+                "amount": t.amount,
+            }
+            for t in sorted(inflows, key=lambda x: x.amount, reverse=True)[:20]
+        ]
+
+        # 2. Top Outflows (up to 20)
+        top_outflows_20 = [
+            {
+                "time": t.timestamp.strftime("%H:%M:%S"),
+                "party": t.counterparty_name or "ผู้รับโอน",
+                "channel": f"{t.counterparty_bank or 'N/A'} {t.counterparty_account or ''}".strip(),
+                "detail": t.description or "-",
+                "amount": t.amount,
+            }
+            for t in sorted(outflows, key=lambda x: x.amount, reverse=True)[:20]
+        ]
+
+        # 3. Frequency Ranking (up to 20)
+        freq_map: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"count": 0, "volume": 0.0, "name": "", "bank": ""})
+        for t in outflows:
+            k = f"{t.counterparty_bank or ''} {t.counterparty_account or ''}".strip() or "N/A"
+            freq_map[k]["count"] += 1
+            freq_map[k]["volume"] += t.amount
+            freq_map[k]["name"] = t.counterparty_name or "ไม่ระบุชื่อ"
+            freq_map[k]["bank"] = t.counterparty_bank or "N/A"
+
+        top_freq_20 = [
+            {
+                "time": f"{v['count']} ครั้ง",
+                "party": v["name"],
+                "channel": f"{v['bank']} {k}",
+                "detail": f"โอนซ้ำ {v['count']} ธุรกรรม (กระจายยอด)",
+                "amount": v["volume"],
+            }
+            for k, v in sorted(freq_map.items(), key=lambda x: x[1]["count"], reverse=True)[:20]
+        ]
+
+        # 4. Velocity Latency Ranking (Fastest transit time after nearest inflow - Linear O(N) scan)
+        sorted_txs = sorted(transactions, key=lambda x: x.timestamp)
+        velocity_list = []
+        latest_in = None
+        for t in sorted_txs:
+            if t.is_reversal:
+                continue
+            if t.activity == ActivityType.INFLOW:
+                latest_in = t
+            elif t.activity == ActivityType.OUTFLOW and latest_in is not None:
+                diff_sec = (t.timestamp - latest_in.timestamp).total_seconds()
+                if diff_sec >= 0:
+                    mins = diff_sec / 60.0
+                    ts = t.timestamp
+                    velocity_list.append({
+                        "time": f"{ts.hour:02d}:{ts.minute:02d}:{ts.second:02d}",
+                        "party": t.counterparty_name or "ผู้รับโอน",
+                        "channel": f"{t.counterparty_bank or 'N/A'} {t.counterparty_account or ''}".strip(),
+                        "detail": f"เงินแช่ {mins:.1f} นาที ({diff_sec:.0f} วินาที)",
+                        "amount": t.amount,
+                        "latency_sec": diff_sec,
+                    })
+        top_velocity_20 = sorted(velocity_list, key=lambda x: x["latency_sec"])[:20]
+
+        # 5. Channel & Off-ramp Split
+        channels_vol = {"ATM Cash-out / ถอนเงินสด": 0.0, "Crypto Off-ramp / สินทรัพย์ดิจิทัล": 0.0, "Bank Transfer / โอนธนาคาร": 0.0}
+        for t in outflows:
+            txt = f"{t.description} {t.counterparty_name} {t.counterparty_bank}".lower()
+            if any(w in txt for w in ["atm", "cardless", "ถอน", "กดเงิน"]):
+                channels_vol["ATM Cash-out / ถอนเงินสด"] += t.amount
+            elif any(w in txt for w in ["crypto", "usdt", "bitkub", "binance", "p2p", "satang"]):
+                channels_vol["Crypto Off-ramp / สินทรัพย์ดิจิทัล"] += t.amount
+            else:
+                channels_vol["Bank Transfer / โอนธนาคาร"] += t.amount
+
+        channels_donut = [{"name": k, "value": round(v, 2)} for k, v in channels_vol.items() if v > 0]
+        if not channels_donut:
+            channels_donut = [{"name": "Bank Transfer / โอนธนาคาร", "value": round(sum(t.amount for t in outflows), 2)}]
+
+        # 6. Hourly 24-Hour Activity
+        hourly_hours = [f"{h:02d}:00" for h in range(24)]
+        hourly_vols = [0.0] * 24
+        hourly_cnts = [0] * 24
+        for t in transactions:
+            h = t.timestamp.hour
+            hourly_vols[h] += t.amount
+            hourly_cnts[h] += 1
+
+        html_content = f"""<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Forensics Dashboard - {report.case_id}</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Apache ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+        body {{ font-family: 'Sarabun', sans-serif; background-color: #0f172a; color: #f8fafc; }}
+        .tab-btn.active {{ border-bottom: 3px solid #38bdf8; color: #38bdf8; font-weight: 700; }}
+        .faq-pill:hover {{ transform: translateY(-1px); }}
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-7xl mx-auto space-y-6">
+        <!-- Top Navigation & Header -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between bg-slate-800 p-5 rounded-2xl shadow-xl border border-slate-700">
+            <div>
+                <div class="flex items-center gap-3">
+                    <span class="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+                        {report.suspicion_level}
+                    </span>
+                    <span class="text-xs text-slate-400 font-mono">CASE: {report.case_id}</span>
+                </div>
+                <h1 class="text-2xl font-bold mt-1 text-white">ศูนย์บัญชาการตรวจพิสูจน์เส้นทางการเงินเชิงนิติวิทยาศาสตร์</h1>
+                <p class="text-sm text-slate-400">เป้าหมาย: <span class="text-amber-300 font-semibold">{report.account_name}</span> ({report.account_no_masked}) | SHA-256: <code class="text-xs text-slate-500">{report.statement_hash_sha256[:16]}...</code></p>
+            </div>
+            <div class="mt-4 md:mt-0 flex gap-3">
+                <button onclick="window.print()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">พิมพ์รายงาน</button>
+                <a href="court_dossier.md" target="_blank" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-semibold transition">เปิดสำนวนคดี</a>
+            </div>
+        </header>
+
+        <!-- KPI Cards Row -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+                <div class="text-xs text-slate-400 uppercase tracking-wide">คะแนนความน่าสงสัยรวม</div>
+                <div class="text-3xl font-bold mt-2 text-rose-400">{report.overall_suspicion_score}<span class="text-lg text-slate-500">/100</span></div>
+                <div class="text-xs text-rose-300 mt-1">ความเสี่ยงสูงมาก (Mule Pattern)</div>
+            </div>
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+                <div class="text-xs text-slate-400 uppercase tracking-wide">อัตราการกวาดเงินออก (Drain Rate)</div>
+                <div class="text-3xl font-bold mt-2 text-amber-400">{drain_rate:.2f}%</div>
+                <div class="text-xs text-slate-400 mt-1">คงเหลือติดบัญชีเพียง ฿{total_in - (total_out + total_fee):,.2f}</div>
+            </div>
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+                <div class="text-xs text-slate-400 uppercase tracking-wide">ยอดเงินเข้าทั้งหมด (Inflow)</div>
+                <div class="text-3xl font-bold mt-2 text-emerald-400">฿{total_in:,.2f}</div>
+                <div class="text-xs text-slate-400 mt-1">{len(inflows)} ธุรกรรม</div>
+            </div>
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
+                <div class="text-xs text-slate-400 uppercase tracking-wide">ยอดระบายออกสุทธิ (Outflow)</div>
+                <div class="text-3xl font-bold mt-2 text-sky-400">฿{total_out:,.2f}</div>
+                <div class="text-xs text-slate-400 mt-1">{len(outflows)} ธุรกรรม + ค่าธรรมเนียม ฿{total_fee:,.2f}</div>
+            </div>
+        </div>
+
+        <!-- Section 12 Upgrade: FAQ Quick-Filter Toolbar (7 Core Judicial Questions) -->
+        <div class="bg-slate-850 p-4 rounded-xl border border-slate-700/80 bg-slate-800/80 shadow-md">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>⚡</span> ทางลัดตอบคำถามยอดฮิตของพนักงานสอบสวนและศาล (7 Judicial FAQ Quick-Filters)
+                </span>
+                <span class="text-[11px] text-slate-400">คลิกเพื่อสลับไปยังพยานหลักฐานเชิงประจักษ์ทันที</span>
+            </div>
+            <div class="flex flex-wrap gap-2 text-xs">
+                <button onclick="handleFaq(1)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-sky-950 border border-slate-700 hover:border-sky-500 rounded-lg text-slate-300 transition">
+                    💸 FAQ 1: เงินไหลไปหาใครบ้าง?
+                </button>
+                <button onclick="handleFaq(2)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-rose-950 border border-slate-700 hover:border-rose-500 rounded-lg text-slate-300 transition">
+                    🚨 FAQ 2: บัญชีม้าแน่นอนไหม?
+                </button>
+                <button onclick="handleFaq(3)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-amber-950 border border-slate-700 hover:border-amber-500 rounded-lg text-slate-300 transition">
+                    🔒 FAQ 3: ควรอายัดบัญชีไหนก่อน?
+                </button>
+                <button onclick="handleFaq(4)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-emerald-950 border border-slate-700 hover:border-emerald-500 rounded-lg text-slate-300 transition">
+                    ⏱️ FAQ 4: เริ่มก่อเหตุเมื่อไหร่?
+                </button>
+                <button onclick="handleFaq(5)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-purple-950 border border-slate-700 hover:border-purple-500 rounded-lg text-slate-300 transition">
+                    🏧 FAQ 5: เงินสด/คริปโตเท่าไหร่?
+                </button>
+                <button onclick="handleFaq(6)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 rounded-lg text-slate-300 transition">
+                    🤖 FAQ 6: ใช้บอทโอนเงินหรือไม่?
+                </button>
+                <button onclick="handleFaq(7)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-indigo-950 border border-slate-700 hover:border-indigo-500 rounded-lg text-slate-300 transition">
+                    🕸️ FAQ 7: ขบวนการเดียวกันไหม?
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Controls -->
+        <div class="flex border-b border-slate-700 space-x-6 text-sm">
+            <button onclick="switchTab('tab-sankey')" id="btn-tab-sankey" class="tab-btn active pb-3 text-slate-300">
+                1. ผังการกระจายเงิน (Sankey Flow)
+            </button>
+            <button onclick="switchTab('tab-network')" id="btn-tab-network" class="tab-btn pb-3 text-slate-300">
+                2. กราฟโครงข่ายเชื่อมโยง (Network Topology)
+            </button>
+            <button onclick="switchTab('tab-timeline')" id="btn-tab-timeline" class="tab-btn pb-3 text-slate-300">
+                3. เส้นเวลาและความเร็ว (Timeline & Velocity)
+            </button>
+            <button onclick="switchTab('tab-table')" id="btn-tab-table" class="tab-btn pb-3 text-slate-300">
+                4. รายการธุรกรรมเชิงลึก (Transactions)
+            </button>
+            <button onclick="switchTab('tab-analytics')" id="btn-tab-analytics" class="tab-btn pb-3 text-slate-300 font-semibold text-sky-400">
+                5. สถิติเชิงลึก (Forensic Data Analytics)
+            </button>
+        </div>
+
+        <!-- Tab 1: Sankey Flow -->
+        <div id="tab-sankey" class="tab-content bg-slate-800 p-6 rounded-2xl border border-slate-700">
+            <h2 class="text-lg font-bold text-white mb-2">ผังแสดงการไหลเวียนของเงินจากเหยื่อผ่านบัญชีม้าสู่ปลายทาง (Sankey Flow Diagram)</h2>
+            <p class="text-xs text-slate-400 mb-4">แสดงเส้นทางตั้งแต่ผู้เสียหาย/แหล่งเงินเข้า เข้าสู่บัญชีเป้าหมาย และการกระจายตัวไปยังบัญชีแถวที่ 2</p>
+            <div id="chart-sankey" style="width: 100%; height: 500px;"></div>
+        </div>
+
+        <!-- Tab 2: Network Topology -->
+        <div id="tab-network" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700">
+            <h2 class="text-lg font-bold text-white mb-2">โครงข่ายความสัมพันธ์หลายมิติ (Multi-Hop Force-Directed Graph)</h2>
+            <p class="text-xs text-slate-400 mb-4">สามารถคลิกลากจุดเพื่อตรวจสอบศูนย์กลางการรับเงินและการกระจายเงิน</p>
+            <div id="chart-network" style="width: 100%; height: 500px;"></div>
+        </div>
+
+        <!-- Tab 3: Timeline & Velocity -->
+        <div id="tab-timeline" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700">
+            <h2 class="text-lg font-bold text-white mb-2">การกระจายตัวตามช่วงเวลาและยอดเงินคงเหลือ (Temporal Velocity Analysis)</h2>
+            <p class="text-xs text-slate-400 mb-4">ตรวจพบพายุการฟอกเงินและพฤติกรรมดูดเงินออกทันทีหลังจากเงินเข้า</p>
+            <div id="chart-timeline" style="width: 100%; height: 450px;"></div>
+        </div>
+
+        <!-- Tab 4: Transactions Table -->
+        <div id="tab-table" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 overflow-x-auto">
+            <h2 class="text-lg font-bold text-white mb-4">ตารางรายการธุรกรรมที่ตรวจสอบแล้ว ({len(transactions):,} รายการ)</h2>
+            <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                    <tr class="bg-slate-900/60 text-slate-400 border-b border-slate-700">
+                        <th class="p-3">เวลา</th>
+                        <th class="p-3">ประเภท</th>
+                        <th class="p-3 text-right">จำนวนเงิน (บาท)</th>
+                        <th class="p-3 text-right">คงเหลือ (บาท)</th>
+                        <th class="p-3">ธนาคารคู่กรณี</th>
+                        <th class="p-3">คำอธิบายรายการ</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700/50">
+                    {"".join([f'''
+                    <tr class="hover:bg-slate-700/30">
+                        <td class="p-3 font-mono">{t.timestamp.strftime("%H:%M:%S")}</td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold {'bg-emerald-500/20 text-emerald-400' if t.activity == ActivityType.INFLOW else ('bg-rose-500/20 text-rose-400' if t.activity == ActivityType.OUTFLOW else 'bg-slate-700 text-slate-300')}">{t.activity.value}</span></td>
+                        <td class="p-3 text-right font-mono {'text-emerald-400 font-semibold' if t.activity == ActivityType.INFLOW else 'text-rose-400'}">฿{t.amount:,.2f}</td>
+                        <td class="p-3 text-right font-mono text-slate-400">฿{t.balance:,.2f}</td>
+                        <td class="p-3 font-semibold">{t.counterparty_bank or '-'} {t.counterparty_account or ''}</td>
+                        <td class="p-3 text-slate-300">{t.description}</td>
+                    </tr>
+                    ''' for t in transactions[:300]])}
+                </tbody>
+            </table>
+            {"<p class='text-center text-xs text-slate-500 py-3'>(แสดงสูงสุด 300 รายการแรกในตาราง สำหรับข้อมูลทั้งหมดสามารถดูได้ในสำนวนศาลหรือแท็บสถิติเชิงลึก)</p>" if len(transactions) > 300 else ""}
+        </div>
+
+        <!-- Tab 5: Extended Forensic Data Analytics (Section 12 Implementation) -->
+        <div id="tab-analytics" class="tab-content hidden space-y-6">
+            <!-- Row 1: Interactive Multi-Stat Leaderboard -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white">ตารางจัดอันดับตัวชี้วัดสำคัญ (Multi-Dimensional Leaderboards)</h2>
+                        <p class="text-xs text-slate-400">เลือกมิติข้อมูลเพื่อวิเคราะห์พฤติกรรมและกำหนดเป้าหมายการสืบสวน</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <select id="leaderboard-metric" onchange="renderLeaderboard()" class="bg-slate-900 border border-slate-700 text-sky-400 text-xs font-semibold rounded-lg px-3 py-2 outline-none">
+                            <option value="outflow">🔴 ยอดเงินโอนออกสูงสุด (Top Outflows)</option>
+                            <option value="inflow">🟢 ยอดเงินโอนเข้าสูงสุด (Top Inflows)</option>
+                            <option value="frequency">🔁 อันดับโอนซ้ำบ่อยที่สุด (Top Frequency)</option>
+                            <option value="velocity">⚡ อันดับเงินผ่านเร็วที่สุด (Top Velocity Latency)</option>
+                        </select>
+                        <select id="leaderboard-limit" onchange="renderLeaderboard()" class="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-2 outline-none">
+                            <option value="10">แสดง 10 อันดับแรก</option>
+                            <option value="20">แสดง 20 อันดับแรก</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-900/60 text-slate-400 border-b border-slate-700">
+                                <th class="p-3 w-16">อันดับ</th>
+                                <th class="p-3 w-28" id="th-col-time">เวลา / จำนวน</th>
+                                <th class="p-3" id="th-col-party">ชื่อบุคคล / คู่ค้า</th>
+                                <th class="p-3">ธนาคาร / บัญชี / ช่องทาง</th>
+                                <th class="p-3">รายละเอียด / พฤติการณ์</th>
+                                <th class="p-3 text-right" id="th-col-amount">ยอดเงิน (บาท)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-tbody" class="divide-y divide-slate-700/50 font-mono">
+                            <!-- Populated dynamically via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Row 2: Off-ramp Channels & 24-Hour Nocturnal Heatmap -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Channel & Cash-out Split -->
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-base font-bold text-white">สัดส่วนช่องทางการผันเงินออก (Off-ramp Channel Split)</h3>
+                        <span class="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">ถอนเงินสด / คริปโต</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">เปรียบเทียบการถอนเงินสดตู้ ATM (Cardless ATM), สินทรัพย์ดิจิทัล (Crypto OTC/P2P) และการโอนธนาคาร</p>
+                    <div id="chart-channels" style="width: 100%; height: 320px;"></div>
+                </div>
+
+                <!-- 24-Hour Activity Heatmap -->
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-base font-bold text-white">ความหนาแน่นธุรกรรมรอบ 24 ชั่วโมง (24-Hour Activity Profile)</h3>
+                        <span class="text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">ยามวิกาล 01:00-06:00</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-4">ตรวจหาความผิดปกติของเวลาการโอนยามวิกาล ซึ่งขัดกับวิถีชีวิตผู้ประกอบการหรือคนทั่วไป</p>
+                    <div id="chart-hourly" style="width: 100%; height: 320px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-xs text-slate-500 py-4">
+            ระบบสถาปัตยกรรมวิเคราะห์เส้นทางการเงินเชิงนิติวิทยาศาสตร์ (FinForensic Enterprise v2.1.0) | รองรับ ป.วิ.อาญา ม.226
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        const sankeyNodes = {json.dumps(sankey_nodes, ensure_ascii=False)};
+        const sankeyLinks = {json.dumps(links, ensure_ascii=False)};
+        const graphNodes = {json.dumps(unique_graph_nodes, ensure_ascii=False)};
+        const graphLinks = {json.dumps(graph_links, ensure_ascii=False)};
+        const timelineData = {json.dumps(timeline_data, ensure_ascii=False)};
+
+        // Section 12 Extended Analytics Data
+        const analyticsData = {{
+            top_inflows: {json.dumps(top_inflows_20, ensure_ascii=False)},
+            top_outflows: {json.dumps(top_outflows_20, ensure_ascii=False)},
+            top_freq: {json.dumps(top_freq_20, ensure_ascii=False)},
+            top_velocity: {json.dumps(top_velocity_20, ensure_ascii=False)},
+            channels: {json.dumps(channels_donut, ensure_ascii=False)},
+            hourly_hours: {json.dumps(hourly_hours)},
+            hourly_vols: {json.dumps(hourly_vols)},
+            hourly_cnts: {json.dumps(hourly_cnts)}
+        }};
+
+        let sankeyChart, networkChart, timelineChart, channelChart, hourlyChart;
+
+        function initSankey() {{
+            sankeyChart = echarts.init(document.getElementById('chart-sankey'));
+            sankeyChart.setOption({{
+                tooltip: {{ trigger: 'item', triggerOn: 'mousemove' }},
+                series: [{{
+                    type: 'sankey',
+                    data: sankeyNodes,
+                    links: sankeyLinks,
+                    emphasis: {{ focus: 'adjacency' }},
+                    lineStyle: {{ color: 'gradient', curveness: 0.5 }},
+                    label: {{ color: '#f8fafc', fontSize: 11 }}
+                }}]
+            }});
+        }}
+
+        function initNetwork() {{
+            networkChart = echarts.init(document.getElementById('chart-network'));
+            networkChart.setOption({{
+                tooltip: {{}},
+                series: [{{
+                    type: 'graph',
+                    layout: 'force',
+                    data: graphNodes,
+                    links: graphLinks,
+                    roam: true,
+                    label: {{ show: true, position: 'right', color: '#cbd5e1', fontSize: 10 }},
+                    force: {{ repulsion: 400, edgeLength: [80, 150] }},
+                    lineStyle: {{ color: '#94a3b8', width: 2, curveness: 0.1 }}
+                }}]
+            }});
+        }}
+
+        function initTimeline() {{
+            timelineChart = echarts.init(document.getElementById('chart-timeline'));
+            const times = timelineData.map(d => d.time);
+            const amounts = timelineData.map(d => d.amount);
+            const balances = timelineData.map(d => d.balance);
+
+            timelineChart.setOption({{
+                tooltip: {{ trigger: 'axis' }},
+                legend: {{ data: ['จำนวนเงินธุรกรรม (฿)', 'ยอดคงเหลือ (฿)'], textStyle: {{ color: '#cbd5e1' }} }},
+                xAxis: {{ type: 'category', data: times, axisLabel: {{ color: '#94a3b8' }} }},
+                yAxis: [
+                    {{ type: 'value', name: 'ธุรกรรม', axisLabel: {{ color: '#94a3b8' }} }},
+                    {{ type: 'value', name: 'ยอดคงเหลือ', axisLabel: {{ color: '#94a3b8' }} }}
+                ],
+                series: [
+                    {{ name: 'จำนวนเงินธุรกรรม (฿)', type: 'bar', data: amounts, itemStyle: {{ color: '#38bdf8' }} }},
+                    {{ name: 'ยอดคงเหลือ (฿)', type: 'line', yAxisIndex: 1, data: balances, itemStyle: {{ color: '#34d399' }} }}
+                ]
+            }});
+        }}
+
+        function initAnalyticsCharts() {{
+            if (!channelChart) {{
+                channelChart = echarts.init(document.getElementById('chart-channels'));
+                channelChart.setOption({{
+                    tooltip: {{ trigger: 'item', formatter: '{{b}}: ฿{{c}} ({{d}}%)' }},
+                    legend: {{ bottom: 0, textStyle: {{ color: '#cbd5e1', fontSize: 11 }} }},
+                    series: [{{
+                        type: 'pie',
+                        radius: ['45%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {{ borderRadius: 8, borderColor: '#1e293b', borderWidth: 2 }},
+                        label: {{ show: false }},
+                        data: analyticsData.channels,
+                        color: ['#f43f5e', '#a855f7', '#38bdf8', '#34d399']
+                    }}]
+                }});
+            }}
+
+            if (!hourlyChart) {{
+                hourlyChart = echarts.init(document.getElementById('chart-hourly'));
+                // Nocturnal hours 01:00 to 06:00 highlighted in amber/rose
+                const barColors = analyticsData.hourly_hours.map((_, idx) => (idx >= 1 && idx <= 6) ? '#f43f5e' : '#38bdf8');
+                hourlyChart.setOption({{
+                    tooltip: {{ trigger: 'axis', formatter: function(p) {{
+                        const idx = p[0].dataIndex;
+                        const vol = analyticsData.hourly_vols[idx].toLocaleString('en-US', {{ minimumFractionDigits: 2 }});
+                        const cnt = analyticsData.hourly_cnts[idx];
+                        const note = (idx >= 1 && idx <= 6) ? '<br/><span style="color:#f43f5e;font-weight:bold;">⚠️ ช่วงยามวิกาล (Odd-hours)</span>' : '';
+                        return 'เวลา ' + analyticsData.hourly_hours[idx] + '<br/>ยอดเงิน: ฿' + vol + '<br/>จำนวน: ' + cnt + ' รายการ' + note;
+                    }} }},
+                    xAxis: {{ type: 'category', data: analyticsData.hourly_hours, axisLabel: {{ color: '#94a3b8', fontSize: 10, interval: 2 }} }},
+                    yAxis: {{ type: 'value', axisLabel: {{ color: '#94a3b8', fontSize: 10 }} }},
+                    series: [{{
+                        name: 'ยอดเงินหมุนเวียน (฿)',
+                        type: 'bar',
+                        data: analyticsData.hourly_vols,
+                        itemStyle: {{
+                            color: function(params) {{ return barColors[params.dataIndex]; }},
+                            borderRadius: [4, 4, 0, 0]
+                        }}
+                    }}]
+                }});
+            }}
+
+            channelChart.resize();
+            hourlyChart.resize();
+        }}
+
+        function renderLeaderboard() {{
+            const metric = document.getElementById('leaderboard-metric').value;
+            const limit = parseInt(document.getElementById('leaderboard-limit').value, 10);
+            const tbody = document.getElementById('leaderboard-tbody');
+            tbody.innerHTML = '';
+
+            let data = [];
+            if (metric === 'outflow') data = analyticsData.top_outflows;
+            else if (metric === 'inflow') data = analyticsData.top_inflows;
+            else if (metric === 'frequency') data = analyticsData.top_freq;
+            else if (metric === 'velocity') data = analyticsData.top_velocity;
+
+            const sliced = data.slice(0, limit);
+            if (sliced.length === 0) {{
+                tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</td></tr>';
+                return;
+            }}
+
+            sliced.forEach((row, i) => {{
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-700/30 transition';
+                const rankColor = i === 0 ? 'text-amber-400 font-bold' : (i === 1 ? 'text-slate-300 font-bold' : (i === 2 ? 'text-amber-600 font-bold' : 'text-slate-400'));
+                const amountColor = metric === 'inflow' ? 'text-emerald-400' : 'text-rose-400';
+                
+                tr.innerHTML = `
+                    <td class="p-3 ${{rankColor}}">#${{i + 1}}</td>
+                    <td class="p-3 text-slate-300 font-mono text-[11px]">${{row.time}}</td>
+                    <td class="p-3 font-semibold text-white font-sans">${{row.party}}</td>
+                    <td class="p-3 text-slate-400 font-sans">${{row.channel}}</td>
+                    <td class="p-3 text-slate-300 font-sans">${{row.detail}}</td>
+                    <td class="p-3 text-right font-bold ${{amountColor}}">฿${{row.amount.toLocaleString('en-US', {{ minimumFractionDigits: 2 }})}}</td>
+                `;
+                tbody.appendChild(tr);
+            }});
+        }}
+
+        function switchTab(tabId) {{
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.remove('hidden');
+            const btn = document.getElementById('btn-' + tabId);
+            if (btn) btn.classList.add('active');
+
+            if (tabId === 'tab-sankey' && sankeyChart) sankeyChart.resize();
+            if (tabId === 'tab-network') {{
+                if (!networkChart) initNetwork();
+                networkChart.resize();
+            }}
+            if (tabId === 'tab-timeline') {{
+                if (!timelineChart) initTimeline();
+                timelineChart.resize();
+            }}
+            if (tabId === 'tab-analytics') {{
+                renderLeaderboard();
+                initAnalyticsCharts();
+            }}
+        }}
+
+        function handleFaq(faqNum) {{
+            if (faqNum === 1) {{
+                switchTab('tab-sankey');
+            }} else if (faqNum === 2) {{
+                switchTab('tab-sankey');
+                window.scrollTo({{ top: 0, behavior: 'smooth' }});
+            }} else if (faqNum === 3) {{
+                switchTab('tab-analytics');
+                document.getElementById('leaderboard-metric').value = 'outflow';
+                renderLeaderboard();
+            }} else if (faqNum === 4) {{
+                switchTab('tab-timeline');
+            }} else if (faqNum === 5) {{
+                switchTab('tab-analytics');
+                setTimeout(() => {{
+                    const el = document.getElementById('chart-channels');
+                    if (el) el.scrollIntoView({{ behavior: 'smooth' }});
+                }}, 100);
+            }} else if (faqNum === 6) {{
+                switchTab('tab-analytics');
+                document.getElementById('leaderboard-metric').value = 'velocity';
+                renderLeaderboard();
+            }} else if (faqNum === 7) {{
+                switchTab('tab-network');
+            }}
+        }}
+
+        // Initial setup
+        window.addEventListener('load', () => {{
+            initSankey();
+        }});
+    </script>
+</body>
+</html>
+"""
+        out_p.write_text(html_content, encoding="utf-8")
+        try:
+            return str(out_p.resolve().relative_to(Path.cwd().resolve()).as_posix())
+        except ValueError:
+            return str(out_p.as_posix())
