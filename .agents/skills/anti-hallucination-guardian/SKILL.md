@@ -34,8 +34,8 @@ Provides rigorous grounding protocols, token-optimized verification gates, and a
 
 5. **The Mandatory Dual Output (Markdown + HTML Dashboard) Persistence Rule**:
    - Whenever providing forensic financial analysis, case answers, or victim dispersal findings, persist BOTH:
-     1. The comprehensive analytical answer to a dedicated Markdown file in `output/` (e.g. `output/victim_<name_slug>_analysis.md`)
-     2. The interactive single-page HTML visual dashboard in `output/` (e.g. `output/victim_<name_slug>_dashboard.html` or `output/dashboard.html`)
+     1. The comprehensive analytical answer to a dedicated Markdown file in `output/` (e.g. `output/victim_<name_slug>_analysis.md` or `output/<statement_name>_analysis.md`)
+     2. The interactive single-page HTML visual dashboard in `output/` (e.g. `output/victim_<name_slug>_dashboard.html` or `output/<statement_name>_dashboard.html`)
    - Always cite the workspace-relative paths of BOTH files in the conversation.
 
 6. **The Strict On-Demand Rule for Court Dossiers & Freezing Orders (Opt-In Only)**:

@@ -27,12 +27,27 @@ class ForensicDashboardGenerator:
         self,
         report: SuspicionReport,
         transactions: List[BankTransaction],
-        output_file_path: Union[str, Path],
+        output_file_path: Optional[Union[str, Path]] = None,
+        statement_name: Optional[str] = None,
     ) -> str:
         """
         Builds and saves the interactive HTML dashboard.
         """
-        out_p = Path(output_file_path)
+        if output_file_path is None:
+            if statement_name:
+                out_p = Path(f"output/{statement_name}_dashboard.html")
+            else:
+                out_p = Path("output/dashboard.html")
+        else:
+            out_p = Path(output_file_path)
+
+        if not statement_name:
+            stem = out_p.stem
+            if stem.endswith("_dashboard"):
+                statement_name = stem[:-10]
+            elif stem != "dashboard":
+                statement_name = stem
+
         out_p.parent.mkdir(parents=True, exist_ok=True)
 
         inflows = [t for t in transactions if t.activity == ActivityType.INFLOW and not t.is_reversal]
@@ -234,12 +249,155 @@ class ForensicDashboardGenerator:
             hourly_vols[h] += t.amount
             hourly_cnts[h] += 1
 
+        # 7. Aggregated Inflows by Counterparty
+        inflow_counterparties: Dict[Tuple[str, str, str], Dict[str, Any]] = defaultdict(
+            lambda: {"bank": "", "acct": "", "name": "", "total_amount": 0.0, "tx_count": 0, "first_seen": None, "last_seen": None, "channels": set()}
+        )
+        for t in inflows:
+            b = t.counterparty_bank or "N/A"
+            a = t.counterparty_account or "N/A"
+            n = t.counterparty_name or "ไม่ระบุชื่อ"
+            key = (b, a, n)
+            entry = inflow_counterparties[key]
+            entry["bank"] = b
+            entry["acct"] = a
+            entry["name"] = n
+            entry["total_amount"] += t.amount
+            entry["tx_count"] += 1
+            if entry["first_seen"] is None or t.timestamp < entry["first_seen"]:
+                entry["first_seen"] = t.timestamp
+            if entry["last_seen"] is None or t.timestamp > entry["last_seen"]:
+                entry["last_seen"] = t.timestamp
+            if t.channel:
+                entry["channels"].add(t.channel)
+
+        sorted_inflows = sorted(inflow_counterparties.values(), key=lambda x: x["total_amount"], reverse=True)
+
+        # 8. Aggregated Outflows by Counterparty
+        outflow_counterparties: Dict[Tuple[str, str, str], Dict[str, Any]] = defaultdict(
+            lambda: {"bank": "", "acct": "", "name": "", "total_amount": 0.0, "tx_count": 0, "first_seen": None, "last_seen": None, "channels": set(), "action": "", "badge": ""}
+        )
+        for t in outflows:
+            b = t.counterparty_bank or "N/A"
+            a = t.counterparty_account or "N/A"
+            n = t.counterparty_name or "ไม่ระบุชื่อ"
+            key = (b, a, n)
+            entry = outflow_counterparties[key]
+            entry["bank"] = b
+            entry["acct"] = a
+            entry["name"] = n
+            entry["total_amount"] += t.amount
+            entry["tx_count"] += 1
+            if entry["first_seen"] is None or t.timestamp < entry["first_seen"]:
+                entry["first_seen"] = t.timestamp
+            if entry["last_seen"] is None or t.timestamp > entry["last_seen"]:
+                entry["last_seen"] = t.timestamp
+            if t.channel:
+                entry["channels"].add(t.channel)
+
+        sorted_outflows = sorted(outflow_counterparties.values(), key=lambda x: x["total_amount"], reverse=True)
+
+        for item in sorted_outflows:
+            combined = f"{item['bank']} {item['acct']} {item['name']} {' '.join(item['channels'])}".lower()
+            if any(w in combined for w in ["atm", "cardless", "ถอนสด", "กดเงิน"]):
+                item["action"] = "CCTV_INSPECTION_ATM"
+                item["badge"] = '<span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[11px] font-semibold">📹 ภาพ CCTV ATM</span>'
+            elif any(w in combined for w in ["p2p", "binance", "bitkub", "crypto", "usdt", "vasp", "satang"]):
+                item["action"] = "VASP_WALLET_FREEZE"
+                item["badge"] = '<span class="px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[11px] font-semibold">🔒 อายัดกระเป๋า VASP</span>'
+            elif any(w in combined for w in [
+                "meta ads", "facebook ads", "fb ads", "google ads", "tiktok ads", "line ads", "twitter ads",
+                "kgp", "kasikorn global payment", "2c2p", "omise", "opn", "gb prime", "paysolutions",
+                "ksher", "truemoney merchant", "payment gateway", "gateway", "merchant pool", "billing"
+            ]):
+                item["action"] = "PLATFORM_SUBPOENA_EVIDENCE"
+                item["badge"] = '<span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 rounded text-[11px] font-semibold">📋 หมายเรียก ม.132</span>'
+            else:
+                item["action"] = "AOC_1441_FREEZE_URGENT"
+                item["badge"] = '<span class="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded text-[11px] font-semibold">🚨 AOC 1441 อายัดด่วน</span>'
+
+        # Build Inflow Table Rows HTML
+        inflow_table_rows = []
+        for idx, row in enumerate(sorted_inflows, 1):
+            pct = (row["total_amount"] / total_in * 100.0) if total_in > 0 else 0.0
+            avg_amt = row["total_amount"] / row["tx_count"] if row["tx_count"] > 0 else 0.0
+            rank_badge = f'<span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold {"bg-amber-500/20 text-amber-300 border border-amber-500/40" if idx == 1 else ("bg-slate-700 text-slate-200" if idx <= 3 else "text-slate-400")}">{idx}</span>'
+            clean_name = row["name"].replace('"', '')
+            clean_acct = row["acct"].replace('"', '')
+            inflow_table_rows.append(f"""
+            <tr class="hover:bg-slate-800/60 transition border-b border-slate-700/50 cp-inflow-row" data-bank="{row['bank']}" data-acct="{clean_acct}" data-name="{clean_name}">
+                <td class="p-3 text-center">{rank_badge}</td>
+                <td class="p-3">
+                    <span class="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono text-sky-400 font-semibold">{row['bank']}</span>
+                    <span class="font-mono text-xs text-slate-200 ml-1.5">{clean_acct}</span>
+                </td>
+                <td class="p-3 font-semibold text-white">{clean_name}</td>
+                <td class="p-3 text-center">
+                    <span class="font-mono text-xs text-slate-200 font-bold">{row['tx_count']} ครั้ง</span>
+                    <div class="text-[10px] text-slate-400">เฉลี่ย ฿{avg_amt:,.2f}</div>
+                </td>
+                <td class="p-3 text-right">
+                    <div class="font-mono text-xs font-bold text-emerald-400">฿{row['total_amount']:,.2f}</div>
+                    <div class="text-[10px] text-sky-400 font-semibold">{pct:.1f}% ของยอดเข้า</div>
+                </td>
+                <td class="p-3 text-center">
+                    <button onclick='navigator.clipboard.writeText("{clean_acct}"); showToast("คัดลอกเลขบัญชี {clean_acct} แล้ว");' class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-200 transition">
+                        คัดลอก
+                    </button>
+                </td>
+            </tr>
+            """)
+        inflow_table_rows_html = "".join(inflow_table_rows)
+
+        # Build Outflow Table Rows HTML
+        outflow_table_rows = []
+        for idx, row in enumerate(sorted_outflows, 1):
+            pct = (row["total_amount"] / total_out * 100.0) if total_out > 0 else 0.0
+            avg_amt = row["total_amount"] / row["tx_count"] if row["tx_count"] > 0 else 0.0
+            rank_badge = f'<span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold {"bg-rose-500/20 text-rose-300 border border-rose-500/40" if idx == 1 else ("bg-slate-700 text-slate-200" if idx <= 3 else "text-slate-400")}">{idx}</span>'
+            clean_name = row["name"].replace('"', '')
+            clean_acct = row["acct"].replace('"', '')
+
+            btn_action = f"""<button onclick='navigator.clipboard.writeText("{clean_acct}"); showToast("คัดลอกเลขบัญชี {clean_acct} แล้ว");' class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-200 transition">คัดลอก</button>"""
+            if row["action"] == "AOC_1441_FREEZE_URGENT":
+                btn_action = f"""<button onclick='navigator.clipboard.writeText("ขออายัดบัญชี {row['bank']} {clean_acct} ({clean_name}) ยอดเงินรวม ฿{row['total_amount']:,.2f}"); showToast("คัดลอกข้อมูลอายัด AOC แล้ว");' class="px-2.5 py-1 bg-rose-600/80 hover:bg-rose-500 rounded text-xs text-white font-semibold transition">Copy AOC</button>"""
+            elif row["action"] == "PLATFORM_SUBPOENA_EVIDENCE":
+                btn_action = f"""<button onclick='navigator.clipboard.writeText("หมายเรียก ป.วิ.อ. ม.132: {clean_name} ({row['bank']} {clean_acct}) ยอดเงินรวม ฿{row['total_amount']:,.2f}"); showToast("คัดลอกคำขอ ม.132 แล้ว");' class="px-2.5 py-1 bg-amber-600/80 hover:bg-amber-500 rounded text-xs text-white font-semibold transition">Copy ม.132</button>"""
+            elif row["action"] == "CCTV_INSPECTION_ATM":
+                btn_action = f"""<button onclick='navigator.clipboard.writeText("ขอภาพ CCTV ตู้ ATM {row['bank']} บัญชี {clean_acct}"); showToast("คัดลอกคำขอ CCTV แล้ว");' class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-200 transition">Copy CCTV</button>"""
+            elif row["action"] == "VASP_WALLET_FREEZE":
+                btn_action = f"""<button onclick='navigator.clipboard.writeText("ขออายัดกระเป๋า VASP: {clean_name} ({clean_acct})"); showToast("คัดลอกคำขอ VASP แล้ว");' class="px-2.5 py-1 bg-purple-700/80 hover:bg-purple-600 rounded text-xs text-white transition">Copy VASP</button>"""
+
+            outflow_table_rows.append(f"""
+            <tr class="hover:bg-slate-800/60 transition border-b border-slate-700/50 cp-outflow-row" data-bank="{row['bank']}" data-acct="{clean_acct}" data-name="{clean_name}">
+                <td class="p-3 text-center">{rank_badge}</td>
+                <td class="p-3">
+                    <span class="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono text-rose-400 font-semibold">{row['bank']}</span>
+                    <span class="font-mono text-xs text-slate-200 ml-1.5">{clean_acct}</span>
+                </td>
+                <td class="p-3 font-semibold text-white">{clean_name}</td>
+                <td class="p-3 text-center">
+                    <span class="font-mono text-xs text-slate-200 font-bold">{row['tx_count']} ครั้ง</span>
+                    <div class="text-[10px] text-slate-400">เฉลี่ย ฿{avg_amt:,.2f}</div>
+                </td>
+                <td class="p-3 text-right">
+                    <div class="font-mono text-xs font-bold text-rose-400">฿{row['total_amount']:,.2f}</div>
+                    <div class="text-[10px] text-sky-400 font-semibold">{pct:.1f}% ของยอดออก</div>
+                </td>
+                <td class="p-3 text-center">
+                    <div class="mb-1">{row['badge']}</div>
+                    {btn_action}
+                </td>
+            </tr>
+            """)
+        outflow_table_rows_html = "".join(outflow_table_rows)
+
         html_content = f"""<!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Forensics Dashboard - {report.case_id}</title>
+    <title>Financial Forensics Dashboard - {statement_name or report.case_id}</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Apache ECharts CDN -->
@@ -306,7 +464,7 @@ class ForensicDashboardGenerator:
                     <span class="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
                         {report.suspicion_level}
                     </span>
-                    <span class="text-xs text-slate-400 font-mono">CASE: {report.case_id}</span>
+                    <span class="text-xs text-slate-400 font-mono">{'STATEMENT: ' + statement_name + ' • ' if statement_name else ''}CASE: {report.case_id}</span>
                 </div>
                 <h1 class="text-2xl font-bold mt-1 text-white">ศูนย์บัญชาการตรวจพิสูจน์เส้นทางการเงินเชิงนิติวิทยาศาสตร์</h1>
                 <p class="text-sm text-slate-400">เป้าหมาย: <span class="text-amber-300 font-semibold">{report.account_name}</span> ({report.account_no_masked}) | SHA-256: <code class="text-xs text-slate-500">{report.statement_hash_sha256[:16]}...</code></p>
@@ -386,7 +544,7 @@ class ForensicDashboardGenerator:
                 3. เส้นเวลาและความเร็ว (Timeline & Velocity)
             </button>
             <button onclick="switchTab('tab-table')" id="btn-tab-table" class="tab-btn pb-3 text-slate-300">
-                4. รายการธุรกรรมเชิงลึก (Transactions)
+                4. จัดอันดับยอดรวมบัญชี โอนเข้า-ออก (Counterparty Ranking)
             </button>
             <button onclick="switchTab('tab-analytics')" id="btn-tab-analytics" class="tab-btn pb-3 text-slate-300 font-semibold text-sky-400">
                 5. สถิติเชิงลึก (Forensic Data Analytics)
@@ -465,34 +623,112 @@ class ForensicDashboardGenerator:
             </div>
         </div>
 
-        <!-- Tab 4: Transactions Table -->
-        <div id="tab-table" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 overflow-x-auto">
-            <h2 class="text-lg font-bold text-white mb-4">ตารางรายการธุรกรรมที่ตรวจสอบแล้ว ({len(transactions):,} รายการ)</h2>
-            <table class="w-full text-left text-xs border-collapse">
-                <thead>
-                    <tr class="bg-slate-900/60 text-slate-400 border-b border-slate-700">
-                        <th class="p-3">เวลา</th>
-                        <th class="p-3">ประเภท</th>
-                        <th class="p-3 text-right">จำนวนเงิน (บาท)</th>
-                        <th class="p-3 text-right">คงเหลือ (บาท)</th>
-                        <th class="p-3">ธนาคารคู่กรณี</th>
-                        <th class="p-3">คำอธิบายรายการ</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-700/50">
-                    {"".join([f'''
-                    <tr class="hover:bg-slate-700/30">
-                        <td class="p-3 font-mono">{t.timestamp.strftime("%H:%M:%S")}</td>
-                        <td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold {'bg-emerald-500/20 text-emerald-400' if t.activity == ActivityType.INFLOW else ('bg-rose-500/20 text-rose-400' if t.activity == ActivityType.OUTFLOW else 'bg-slate-700 text-slate-300')}">{t.activity.value}</span></td>
-                        <td class="p-3 text-right font-mono {'text-emerald-400 font-semibold' if t.activity == ActivityType.INFLOW else 'text-rose-400'}">฿{t.amount:,.2f}</td>
-                        <td class="p-3 text-right font-mono text-slate-400">฿{t.balance:,.2f}</td>
-                        <td class="p-3 font-semibold">{t.counterparty_bank or '-'} {t.counterparty_account or ''}</td>
-                        <td class="p-3 text-slate-300">{t.description}</td>
-                    </tr>
-                    ''' for t in transactions[:300]])}
-                </tbody>
-            </table>
-            {"<p class='text-center text-xs text-slate-500 py-3'>(แสดงสูงสุด 300 รายการแรกในตาราง สำหรับข้อมูลทั้งหมดสามารถดูได้ในสำนวนศาลหรือแท็บสถิติเชิงลึก)</p>" if len(transactions) > 300 else ""}
+        <!-- Tab 4: Aggregated Counterparty Ranking -->
+        <div id="tab-table" class="tab-content hidden space-y-6">
+            <!-- Header bar with search and presentation mode -->
+            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🏆</span>
+                            <h2 class="text-lg font-bold text-white">ตารางจัดอันดับยอดรวมบัญชีคู่กรณี (Aggregated Counterparty Ledger)</h2>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">สรุปรวมยอดเงิน ความถี่ และจำแนกประเภทบัญชีคู่กรณี แยกฝั่งเงินเข้า (Inflow) และเงินออก (Outflow) สำหรับการสืบสวนและอายัด</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="relative">
+                            <input type="text" id="cpSearch" oninput="filterCounterparties()" placeholder="ค้นหา ธนาคาร, เลขบัญชี, ชื่อ..." class="w-64 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                            <span class="absolute right-2.5 top-1.5 text-slate-500 text-xs">🔍</span>
+                        </div>
+                        <button onclick="toggleCardFullscreen('tab-table', null)" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                            <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Cards Row -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-700/60">
+                    <div class="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
+                        <div>
+                            <div class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">🟢 แหล่งที่มาเงินเข้า (Inflow Originators)</div>
+                            <div class="text-lg font-bold text-white font-mono mt-0.5">{len(sorted_inflows):,} <span class="text-xs font-normal text-slate-400">บัญชีคู่กรณี</span></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-slate-400">ยอดเงินรวม</div>
+                            <div class="text-base font-bold text-emerald-400 font-mono">฿{total_in:,.2f}</div>
+                        </div>
+                    </div>
+                    <div class="bg-rose-950/20 border border-rose-500/30 rounded-xl p-3.5 flex items-center justify-between">
+                        <div>
+                            <div class="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">🔴 ปลายทางเงินออก (Outflow Beneficiaries)</div>
+                            <div class="text-lg font-bold text-white font-mono mt-0.5">{len(sorted_outflows):,} <span class="text-xs font-normal text-slate-400">บัญชีคู่กรณี</span></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs text-slate-400">ยอดเงินรวม</div>
+                            <div class="text-base font-bold text-rose-400 font-mono">฿{total_out:,.2f}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Comparison Tables Side-by-Side (or stacked on smaller screens) -->
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <!-- Inflow Table Card -->
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex flex-col">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+                            <h3 class="text-sm font-bold text-white">อันดับบัญชีเงินเข้าสูงสุด (Top Inflow Sources)</h3>
+                        </div>
+                        <span class="text-xs text-slate-400 font-mono" id="inflowCountLabel">{len(sorted_inflows)} บัญชี</span>
+                    </div>
+                    <div class="overflow-x-auto overflow-y-auto max-h-[600px] border border-slate-700/60 rounded-xl">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-700 shadow-sm z-10">
+                                <tr>
+                                    <th class="p-2.5 text-center w-12">#</th>
+                                    <th class="p-2.5">ธนาคาร / เลขบัญชี</th>
+                                    <th class="p-2.5">ชื่อบัญชี</th>
+                                    <th class="p-2.5 text-center">ความถี่</th>
+                                    <th class="p-2.5 text-right">ยอดรวม (บาท)</th>
+                                    <th class="p-2.5 text-center w-20">คัดลอก</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inflowTableBody" class="divide-y divide-slate-700/40">
+                                {inflow_table_rows_html}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Outflow Table Card -->
+                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex flex-col">
+                    <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-rose-400"></span>
+                            <h3 class="text-sm font-bold text-white">อันดับบัญชีเงินออกสูงสุด (Top Outflow Destinations)</h3>
+                        </div>
+                        <span class="text-xs text-slate-400 font-mono" id="outflowCountLabel">{len(sorted_outflows)} บัญชี</span>
+                    </div>
+                    <div class="overflow-x-auto overflow-y-auto max-h-[600px] border border-slate-700/60 rounded-xl">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead class="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-700 shadow-sm z-10">
+                                <tr>
+                                    <th class="p-2.5 text-center w-12">#</th>
+                                    <th class="p-2.5">ธนาคาร / เลขบัญชี</th>
+                                    <th class="p-2.5">ชื่อบัญชี</th>
+                                    <th class="p-2.5 text-center">ความถี่</th>
+                                    <th class="p-2.5 text-right">ยอดรวม (บาท)</th>
+                                    <th class="p-2.5 text-center w-28">มาตรการสืบสวน</th>
+                                </tr>
+                            </thead>
+                            <tbody id="outflowTableBody" class="divide-y divide-slate-700/40">
+                                {outflow_table_rows_html}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Tab 5: Extended Forensic Data Analytics (Section 12 Implementation) -->
@@ -569,6 +805,12 @@ class ForensicDashboardGenerator:
                     <div id="chart-hourly" class="chart-container" style="width: 100%; height: 320px;"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="fixed bottom-6 right-6 bg-slate-900/95 border border-sky-500/50 text-sky-200 px-4 py-2.5 rounded-xl shadow-2xl text-xs font-semibold transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2">
+            <span>📋</span>
+            <span id="toastMsg">คัดลอกข้อมูลแล้ว</span>
         </div>
 
         <!-- Footer -->
@@ -964,9 +1206,8 @@ class ForensicDashboardGenerator:
                 switchTab('tab-sankey');
                 window.scrollTo({{ top: 0, behavior: 'smooth' }});
             }} else if (faqNum === 3) {{
-                switchTab('tab-analytics');
-                document.getElementById('leaderboard-metric').value = 'outflow';
-                renderLeaderboard();
+                switchTab('tab-table');
+                window.scrollTo({{ top: 0, behavior: 'smooth' }});
             }} else if (faqNum === 4) {{
                 switchTab('tab-timeline');
             }} else if (faqNum === 5) {{
@@ -982,6 +1223,48 @@ class ForensicDashboardGenerator:
             }} else if (faqNum === 7) {{
                 switchTab('tab-network');
             }}
+        }}
+
+        function showToast(msg) {{
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            if (!toast || !toastMsg) return;
+            toastMsg.innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => {{
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }}, 2500);
+        }}
+
+        function filterCounterparties() {{
+            const query = (document.getElementById('cpSearch').value || '').trim().toLowerCase();
+            let inCount = 0;
+            let outCount = 0;
+
+            document.querySelectorAll('.cp-inflow-row').forEach(row => {{
+                const bank = (row.getAttribute('data-bank') || '').toLowerCase();
+                const acct = (row.getAttribute('data-acct') || '').toLowerCase();
+                const name = (row.getAttribute('data-name') || '').toLowerCase();
+                const match = bank.includes(query) || acct.includes(query) || name.includes(query);
+                row.style.display = match ? '' : 'none';
+                if (match) inCount++;
+            }});
+
+            document.querySelectorAll('.cp-outflow-row').forEach(row => {{
+                const bank = (row.getAttribute('data-bank') || '').toLowerCase();
+                const acct = (row.getAttribute('data-acct') || '').toLowerCase();
+                const name = (row.getAttribute('data-name') || '').toLowerCase();
+                const match = bank.includes(query) || acct.includes(query) || name.includes(query);
+                row.style.display = match ? '' : 'none';
+                if (match) outCount++;
+            }});
+
+            const inLabel = document.getElementById('inflowCountLabel');
+            if (inLabel) inLabel.innerText = query ? (inCount + ' บัญชี (กรองแล้ว)') : ('{len(sorted_inflows)} บัญชี');
+            const outLabel = document.getElementById('outflowCountLabel');
+            if (outLabel) outLabel.innerText = query ? (outCount + ' บัญชี (กรองแล้ว)') : ('{len(sorted_outflows)} บัญชี');
         }}
 
         // Initial setup

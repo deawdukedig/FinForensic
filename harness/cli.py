@@ -108,10 +108,10 @@ def main() -> None:
     dossier_parser.add_argument("--case-id", default="CASE-2026-0820", help="Investigative Case ID")
     dossier_parser.add_argument("--officer", default="พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)", help="Investigating Officer")
 
-        # 12. generate-dashboard (Tri-Modal Visual Dashboard)
+    # 12. generate-dashboard (Tri-Modal Visual Dashboard)
     dash_parser = subparsers.add_parser("generate-dashboard", help="Generate interactive HTML visual dashboard")
     dash_parser.add_argument("--statement", default="input/statement.csv", help="Path to statement CSV")
-    dash_parser.add_argument("--output", default="output/dashboard.html", help="Output HTML file path")
+    dash_parser.add_argument("--output", default=None, help="Output HTML file path (default: output/<statement_name>_dashboard.html)")
     dash_parser.add_argument("--case-id", default="CASE-2026-0820", help="Investigative Case ID")
 
     # 13. export-pdf (Court Dossier PDF Generator)
@@ -476,15 +476,16 @@ def main() -> None:
 
             # Mandatory Dual Output: Markdown Analysis + Interactive HTML Dashboard
             from src.ui.dashboard_generator import ForensicDashboardGenerator
-            analysis_path = Path("output/statement_analysis.md")
+            stmt_stem = Path(csv_path).stem
+            analysis_path = Path(f"output/{stmt_stem}_analysis.md")
             analysis_path.parent.mkdir(parents=True, exist_ok=True)
             analysis_text = dossier_gen.generate_markdown_dossier(report, transactions, vault)
             analysis_path.write_text(analysis_text, encoding="utf-8")
             vault.record_action("EXPORT_ANALYSIS_MD", f"Exported statement analysis to {analysis_path}")
 
-            dash_path = Path("output/dashboard.html")
+            dash_path = Path(f"output/{stmt_stem}_dashboard.html")
             dash_path.parent.mkdir(parents=True, exist_ok=True)
-            ForensicDashboardGenerator().generate_html(report, transactions, dash_path.as_posix())
+            ForensicDashboardGenerator().generate_html(report, transactions, dash_path.as_posix(), statement_name=stmt_stem)
             vault.record_action("EXPORT_DASHBOARD", f"Exported statement dashboard to {dash_path}")
 
             print(f"\n📊 Forensic Analysis Markdown: {analysis_path.as_posix()}")
@@ -527,7 +528,9 @@ def main() -> None:
         )
 
         ui_gen = ForensicDashboardGenerator()
-        out_file = ui_gen.generate_html(rep, txs, args.output)
+        stmt_stem = Path(csv_path).stem
+        out_target = args.output or f"output/{stmt_stem}_dashboard.html"
+        out_file = ui_gen.generate_html(rep, txs, out_target, statement_name=stmt_stem)
         print("=" * 65)
         print("📊 INTERACTIVE FORENSIC DASHBOARD GENERATED")
         print(f"Target Statement: {csv_path}")

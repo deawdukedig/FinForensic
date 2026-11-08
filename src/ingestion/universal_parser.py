@@ -238,8 +238,6 @@ class UniversalStatementParser:
 
         # Handle Police Template format (template04)
         if col_map.get("_format_type_") == 1:
-            acct_no = row[col_map["accountno"]].strip() if "accountno" in col_map and col_map["accountno"] < row_len else fallback_acct_no
-            acct_name = row[col_map["accountname"]].strip() if "accountname" in col_map and col_map["accountname"] < row_len else fallback_acct_name
             tx_date = row[col_map["txdate"]].strip() if "txdate" in col_map and col_map["txdate"] < row_len else ""
             tx_time = row[col_map["txtime"]].strip() if "txtime" in col_map and col_map["txtime"] < row_len else ""
             dep_str = row[col_map["deposit"]].replace(",", "").strip() if "deposit" in col_map and col_map["deposit"] < row_len else ""
@@ -272,6 +270,14 @@ class UniversalStatementParser:
 
             if dep_amt <= 0.0 and wd_amt <= 0.0:
                 return None
+
+            acct_no = row[col_map["accountno"]].strip() if "accountno" in col_map and col_map["accountno"] < row_len else ""
+            if not acct_no:
+                acct_no = to_acct if dep_amt > 0 and to_acct else (from_acct if wd_amt > 0 and from_acct else fallback_acct_no)
+
+            acct_name = row[col_map["accountname"]].strip() if "accountname" in col_map and col_map["accountname"] < row_len else ""
+            if not acct_name:
+                acct_name = to_name if dep_amt > 0 and to_name else (from_name if wd_amt > 0 and from_name else fallback_acct_name)
 
             ts = self._parse_datetime(tx_date, tx_time)
             tx_id = f"TX-{ts.year:04d}{ts.month:02d}{ts.day:02d}{ts.hour:02d}{ts.minute:02d}{ts.second:02d}-{line_num:05d}"

@@ -328,6 +328,12 @@ class VictimFlowTracer:
                 action = "CCTV_INSPECTION_ATM"
             elif any(w in combined_target for w in ["p2p", "binance", "bitkub", "crypto", "usdt", "vasp"]):
                 action = "VASP_WALLET_FREEZE"
+            elif any(w in combined_target for w in [
+                "meta ads", "facebook ads", "fb ads", "google ads", "tiktok ads", "line ads", "twitter ads",
+                "kgp", "kasikorn global payment", "2c2p", "omise", "opn", "gb prime", "paysolutions",
+                "ksher", "truemoney merchant", "payment gateway", "gateway", "merchant pool", "billing"
+            ]):
+                action = "PLATFORM_SUBPOENA_EVIDENCE"
             else:
                 action = "AOC_1441_FREEZE_URGENT"
 
@@ -382,6 +388,7 @@ class VictimFlowTracer:
         tier2 = [d for d in result.top_destinations if d.recommended_action == "AOC_1441_FREEZE_URGENT"]
         cashout = [d for d in result.top_destinations if d.recommended_action == "CCTV_INSPECTION_ATM"]
         crypto = [d for d in result.top_destinations if d.recommended_action == "VASP_WALLET_FREEZE"]
+        gateways = [d for d in result.top_destinations if d.recommended_action == "PLATFORM_SUBPOENA_EVIDENCE"]
 
         edges = []
 
@@ -443,7 +450,20 @@ class VictimFlowTracer:
                 edges.append(f"    M -->|P2P OTC| {node_id}")
             lines.append("    end")
 
-        # 4. Residual Buffer
+        # 4. Payment Gateways & Ad Platforms
+        if gateways:
+            lines.append('    subgraph GATEWAY["ระบบรับชำระเงินและค่าโฆษณา (Payment Gateway & Ad Platforms)"]')
+            for idx, d in enumerate(gateways, 1):
+                node_id = f"GW_{idx}"
+                clean_name = d.account_name.replace('"', "'")
+                clean_acct = d.account_no.replace('"', "")
+                display_title = f"{d.bank} {clean_acct}" if clean_name in ("N/A", "", "UNKNOWN") else f"{clean_name} ({d.bank})"
+                label = f"{display_title}: ฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
+                lines.append(f'        {node_id}["{label}"]')
+                edges.append(f"    M -->|Payment/Ads| {node_id}")
+            lines.append("    end")
+
+        # 5. Residual Buffer
         if result.net_residual_buffer_thb > 0:
             res_pct = (result.net_residual_buffer_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
             lines.append('    subgraph BUFFER["เงินตกค้างในบัญชีม้า (Residual Buffer)"]')
@@ -518,13 +538,23 @@ class VictimFlowTracer:
         # Section 4: Actionable Directives
         lines.append("---")
         lines.append("## 4. มาตรการสำหรับพนักงานสอบสวน (Immediate Action Directives)")
-        lines.append("1. **การส่งคำขออายัดศูนย์ AOC 1441 ทันที:**")
+        lines.append("1. **การส่งคำขออายัดศูนย์ AOC 1441 ทันที (เฉพาะบัญชีม้าบุคคลธรรมดา):**")
         for d in result.top_destinations:
             if d.recommended_action == "AOC_1441_FREEZE_URGENT" and d.account_no != "UNKNOWN":
                 lines.append(f"   - **อายัดบัญชี:** {d.bank} เลขที่ `{d.account_no}` ({d.account_name}) วงเงินสิทธิเฉลี่ยทรัพย์ ฿{d.proportional_claim_thb:,.2f}")
-        lines.append("2. **การประสานงาน ปปง. เพื่อเฉลี่ยทรัพย์คืน (Asset Restitution):**")
-        lines.append(f"   - ใช้ตารางข้อ 2 เป็น **บัญชีแนบท้ายคำร้องขอคุ้มครองสิทธิผู้เสียหาย** ตาม พ.ร.บ. ปปง. มาตรา 49/1 ยอดเรียกร้องรวม **฿{result.total_claimable_thb:,.2f}**")
-        lines.append("3. **การขอพยานหลักฐานทางดิจิทัลเพิ่มเติม:**")
+        gateways = [d for d in result.top_destinations if d.recommended_action == "PLATFORM_SUBPOENA_EVIDENCE"]
+        if gateways:
+            lines.append("2. **มาตรการขอพยานหลักฐานและระงับบัญชีโฆษณาตาม ป.วิ.อ. มาตรา 132 (Payment Gateway / Ad Platforms):**")
+            lines.append("   - *⚠️ ข้อควรระวัง: ห้ามส่งคำสั่งอายัดบัญชีผ่าน AOC 1441 ไปยังบัญชีผู้ให้บริการรับชำระเงิน/แพลตฟอร์มโฆษณา เพราะเป็นบัญชีรวมระดับองค์กร*")
+            for d in gateways:
+                lines.append(f"   - **ออกหมายเรียก ม.132 ต่อ {d.account_name} ({d.bank} {d.account_no}):** ขอข้อมูล Sub-merchant ID, Ad Account KYC, Campaign Fanpage, IP Logs และระงับบัญชีโฆษณา (ยอดเงินที่ไหลเข้า: ฿{d.proportional_claim_thb:,.2f})")
+            lines.append("3. **การประสานงาน ปปง. เพื่อเฉลี่ยทรัพย์คืน (Asset Restitution):**")
+            lines.append(f"   - ใช้ตารางข้อ 2 เป็น **บัญชีแนบท้ายคำร้องขอคุ้มครองสิทธิผู้เสียหาย** ตาม พ.ร.บ. ปปง. มาตรา 49/1 ยอดเรียกร้องรวม **฿{result.total_claimable_thb:,.2f}**")
+            lines.append("4. **การขอพยานหลักฐานทางดิจิทัลเพิ่มเติม:**")
+        else:
+            lines.append("2. **การประสานงาน ปปง. เพื่อเฉลี่ยทรัพย์คืน (Asset Restitution):**")
+            lines.append(f"   - ใช้ตารางข้อ 2 เป็น **บัญชีแนบท้ายคำร้องขอคุ้มครองสิทธิผู้เสียหาย** ตาม พ.ร.บ. ปปง. มาตรา 49/1 ยอดเรียกร้องรวม **฿{result.total_claimable_thb:,.2f}**")
+            lines.append("3. **การขอพยานหลักฐานทางดิจิทัลเพิ่มเติม:**")
         lines.append("   - ประสานธนาคารเจ้าของตู้ ATM เพื่อขอไฟล์ภาพ CCTV และพิกัดตู้")
         lines.append("   - ประสานผู้ให้บริการ VASP (Bitkub/Binance) เพื่อขอข้อมูล KYC ของบัญชีกระเป๋าเงินปลายทาง")
 
@@ -587,24 +617,96 @@ class VictimFlowTracer:
         tier2_mules = [d for d in result.top_destinations if d.recommended_action == "AOC_1441_FREEZE_URGENT"]
         atm_cashing = [d for d in result.top_destinations if d.recommended_action == "CCTV_INSPECTION_ATM"]
         vasp_p2p = [d for d in result.top_destinations if d.recommended_action == "VASP_WALLET_FREEZE"]
+        gateways = [d for d in result.top_destinations if d.recommended_action == "PLATFORM_SUBPOENA_EVIDENCE"]
 
         tot_tier2_claim = sum(d.proportional_claim_thb for d in tier2_mules)
         tot_atm_claim = sum(d.proportional_claim_thb for d in atm_cashing)
         tot_vasp_claim = sum(d.proportional_claim_thb for d in vasp_p2p)
+        tot_gateway_claim = sum(d.proportional_claim_thb for d in gateways)
 
         lines.append("### จำแนกกลุ่มผู้รับประโยชน์และช่องทางการระบายเงิน:")
-        lines.append(f"1. **เครือข่ายบัญชีม้าแถว 2 (Mule Tier-2 Mobile Banking):** สิทธิเฉลี่ยทรัพย์คืนรวม **฿{tot_tier2_claim:,.2f}** ({tot_tier2_claim/result.total_inflow_thb*100:.1f}%)")
-        lines.append(f"   - มีการกระจายไปยังบัญชีม้าแถว 2 หลายบัญชี เพื่อหลีกเลี่ยงเกณฑ์การรายงานธุรกรรม (Structuring)")
-        lines.append(f"2. **การถอนเงินสดผ่านตู้ ATM ไม่ใช้บัตร (Physical Cash-Out):** สิทธิเฉลี่ยทรัพย์คืนรวม **฿{tot_atm_claim:,.2f}** ({tot_atm_claim/result.total_inflow_thb*100:.1f}%)")
-        lines.append(f"   - การกดเงินสดออกจากระบบทันทีเพื่อตัดตอนรอยเท้าดิจิทัล (Digital Footprint)")
-        lines.append(f"3. **ช่องทางสินทรัพย์ดิจิทัล P2P Escrow (Crypto Off-Ramp):** สิทธิเฉลี่ยทรัพย์คืนรวม **฿{tot_vasp_claim:,.2f}** ({tot_vasp_claim/result.total_inflow_thb*100:.1f}%)")
-        lines.append(f"   - การแปลงสภาพเป็นเงินดิจิทัล USDT เพื่อโอนย้ายข้ามพรมแดน")
+        cat_idx = 1
+        if tier2_mules:
+            lines.append(f"{cat_idx}. **เครือข่ายบัญชีม้าแถว 2 (Mule Tier-2 Mobile Banking):** สิทธิเฉลี่ยทรัพย์คืนรวม **฿{tot_tier2_claim:,.2f}** ({tot_tier2_claim/result.total_inflow_thb*100:.1f}%)")
+            lines.append("   - มีการกระจายไปยังบัญชีม้าแถว 2 หลายบัญชี เพื่อหลีกเลี่ยงเกณฑ์การรายงานธุรกรรม (Structuring)")
+            cat_idx += 1
+        if gateways:
+            lines.append(f"{cat_idx}. **ระบบรับชำระเงินและแพลตฟอร์มโฆษณา (Payment Gateway & Ad Platforms):** สิทธิเฉลี่ยทรัพย์คืนรวม **฿{tot_gateway_claim:,.2f}** ({tot_gateway_claim/result.total_inflow_thb*100:.1f}%)")
+            lines.append("   - การนำเงินไปตัดชำระค่าโฆษณาโซเชียลมีเดียหรือแปลงสภาพผ่านเกตเวย์ (ห้ามอายัดผ่าน AOC 1441 แต่ต้องออกหมายเรียก ม.132)")
+            cat_idx += 1
+        if atm_cashing:
+            lines.append(f"{cat_idx}. **การถอนเงินสดผ่านตู้ ATM ไม่ใช้บัตร (Physical Cash-Out):** สิทธิเฉลี่ยทรัพย์คืนรวม **฿{tot_atm_claim:,.2f}** ({tot_atm_claim/result.total_inflow_thb*100:.1f}%)")
+            lines.append("   - การกดเงินสดออกจากระบบทันทีเพื่อตัดตอนรอยเท้าดิจิทัล (Digital Footprint)")
+            cat_idx += 1
+        if vasp_p2p:
+            lines.append(f"{cat_idx}. **ช่องทางสินทรัพย์ดิจิทัล P2P Escrow (Crypto Off-Ramp):** สิทธิเฉลี่ยทรัพย์คืนรวม **฿{tot_vasp_claim:,.2f}** ({tot_vasp_claim/result.total_inflow_thb*100:.1f}%)")
+            lines.append("   - การแปลงสภาพเป็นเงินดิจิทัล USDT เพื่อโอนย้ายข้ามพรมแดน")
+            cat_idx += 1
+
         lines.append("")
         lines.append("---")
         lines.append("")
 
-        # Section 3: MILP Mathematical Proofs
-        lines.append("## 3. การรับรองความถูกต้องด้วยสมการคณิตศาสตร์เชิงเส้น (MILP Mathematical Proofs)")
+        # Section 3: Transfer Behavioral Circumstances & Critical Forensic Insights
+        lines.append("## 3. พฤติการณ์ของการโอนและประเด็นสำคัญเชิงสืบสวน (Transfer Circumstances & Critical Forensic Insights)")
+        lines.append("")
+        lines.append("### 3.1 พฤติการณ์การเคลื่อนย้ายเงินและรูปแบบการหลอกลวง (Transfer Circumstances & Modus Operandi)")
+        vic_dates = set(t.timestamp.strftime("%Y-%m-%d") for t in result.inflow_transactions)
+        if len(vic_dates) <= 1:
+            lines.append(f"- **รูปแบบการโอนของเหยื่อ (Concentrated Funnel):** ผู้เสียหายถูกชักจูงให้ทำรายการโอนเงินก้อนใหญ่ต่อเนื่องกันภายในวันเดียวกัน รวม {len(result.inflow_transactions)} รายการ เป็นเงิน **฿{result.total_inflow_thb:,.2f}** สะท้อนถึงการถูกหลอกล่อตามสคริปต์กลโกงอย่างเข้มข้นในระยะเวลาอันสั้น")
+        else:
+            lines.append(f"- **รูปแบบการโอนของเหยื่อ (Distributed Inflow):** ผู้เสียหายทำรายการโอนเงินกระจายตัวต่อเนื่องข้ามวัน ({len(vic_dates)} วัน) รวม {len(result.inflow_transactions)} รายการ เป็นเงิน **฿{result.total_inflow_thb:,.2f}** ชี้ให้เห็นถึงกลลวงในลักษณะหลอกลงทุนต่อเนื่อง (Investment Fraud / Pig Butchering)")
+        lines.append(f"- **การตอบสนองของบัญชีม้าแถว 1 (`{result.target_account}`):** มียอดเงินที่ถูกจับคู่ระบายออกทันที **฿{result.total_matched_outflow_thb:,.2f}** (อัตราการกวาดเงิน: **{result.drain_percentage:.2f}%**) โดยมีระยะเวลาเงินแช่พักเฉลี่ย **{result.avg_latency_minutes:.1f} นาที**")
+        lines.append("")
+
+        lines.append("### 3.2 การวิเคราะห์โอกาสทองในการอายัดทรัพย์สินคืน (Asset Recovery Golden Window Analysis)")
+        res_pct = (result.net_residual_buffer_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
+        if result.net_residual_buffer_thb >= 50000.0 or res_pct >= 20.0:
+            lines.append("> [!IMPORTANT]")
+            lines.append(f"> **⭐ ตรวจพบโอกาสทองในการอายัดทรัพย์สินคืน (Primary Golden Window for Asset Recovery)**")
+            lines.append(f"> - ตรวจพบยอดเงินคงค้างตกค้างในบัญชีม้าพักเงินแถว 1 (`{result.target_account}` {result.target_account_name}) สูงถึง **฿{result.net_residual_buffer_thb:,.2f}** (คิดเป็น **{res_pct:.1f}%** ของความเสียหายทั้งหมด)")
+            lines.append(f"> - **นัยสำคัญเชิงสืบสวน:** มิจฉาชีพยังไม่สามารถระบายเงินส่วนนี้ออกไปได้ทัน (อาจติดปัญหาเพดานการโอนรายวัน Daily Limit หรือระบบเฝ้าระวังของธนาคาร)")
+            lines.append(f"> - **ข้อสั่งการเร่งด่วนที่สุด:** พนักงานสอบสวนต้องเร่งส่งคำสั่งระงับธุรกรรม (AOC 1441) ไปยังบัญชีม้าแถว 1 นี้เป็นลำดับแรกสุดทันที เพราะเป็นจุดที่มีโอกาสได้เงินสดคืนกลับมาคุ้มครองสิทธิให้แก่ผู้เสียหายจริงสูงสุด")
+        elif result.net_residual_buffer_thb > 0:
+            lines.append(f"- ตรวจพบยอดเงินคงค้างในบัญชีม้าพักเงินแถว 1 จำนวน **฿{result.net_residual_buffer_thb:,.2f}** ({res_pct:.1f}%) ให้ส่งคำสั่งอายัดบัญชีม้าแถว 1 ควบคู่ไปกับบัญชีแถว 2")
+        else:
+            lines.append(f"- กระแสเงินของผู้เสียหายถูกระบายออกจากบัญชีม้าแถว 1 ครบถ้วน 100% (Instant Flush / Rapid Account Sweeping) ภายในเวลาเฉลี่ย {result.avg_latency_minutes:.1f} นาที หน้าต่างการอายัดในบัญชีแถว 1 ปิดลงแล้ว ให้เน้นย้ำการสกัดกั้นในแถว 2 และประสานงาน CCTV / VASP Escrow ทันที")
+        lines.append("")
+
+        lines.append("### 3.3 การจัดการกรณีปลายทางเป็น Payment Gateway / Tech Ad Platform (Platform Subpoena Directives)")
+        if gateways:
+            for gw in gateways:
+                lines.append(f"#### ปลายทาง: `{gw.bank} {gw.account_no}` — **{gw.account_name}** (ยอดเงิน: ฿{gw.proportional_claim_thb:,.2f} / {gw.percentage_of_victim_funds:.1f}%)")
+                lines.append("1. **ข้อจำกัดเชิงระบบและข้อควรระวัง (Systemic Limitation):**")
+                lines.append(f"   - บัญชีดังกล่าวเป็น **บัญชีรวมของนิติบุคคลผู้ให้บริการชำระเงิน (Corporate Merchant Pool / Aggregator Clearing Account)** ของ {gw.account_name} เพื่อรองรับการชำระเงินออนไลน์หรือค่าบริการแพลตฟอร์ม")
+                lines.append("   - **⚠️ ข้อควรระวังเด็ดขาด:** **ห้ามส่งคำสั่งอายัดบัญชีเงินฝากทั้งบัญชีผ่านระบบ AOC 1441 หรือส่งหนังสืออายัดไปยังธนาคารเจ้าของบัญชี** เนื่องจากจะกระทบต่อธุรกรรมปกติของประชาชนทั่วไปนับหมื่นราย และธนาคารจะปฏิเสธคำสั่งอายัดทันที")
+                lines.append("2. **พฤติการณ์การฟอกเงินผ่านแอด (Ad Spend Laundering & Victim Acquisition Loop):**")
+                lines.append("   - มิจฉาชีพนำเงินที่หลอกลวงได้จากผู้เสียหายไปตัดชำระค่าโฆษณาบนโซเชียลมีเดีย (Ad Spend Reinvestment) โดยตรง เพื่อนำไปใช้โปรโมตเพจหรือยิงแคมเปญโฆษณาหลอกลวงเหยื่อรายใหม่ๆ เข้าสู่วงจรอย่างต่อเนื่อง")
+                lines.append("   - เป็นการแปลงสภาพเงินผิดกฎหมาย (Integration) ไปเป็นค่าบริการทางเทคโนโลยี ทำให้เส้นทางการเงินไม่ไหลเข้าบัญชีม้าบุคคลธรรมดาแถวถัดไป")
+                lines.append("3. **แนวทางเชิงสืบสวนและมาตรการขอพยานหลักฐานตาม ป.วิ.อ. มาตรา 132 (Subpoena & Preservation Directives):**")
+                lines.append(f"   - **ขั้นที่ 1 (ขอข้อมูลตัวแทนรับชำระ):** ออกหมายเรียกพยานเอกสาร/ข้อมูล (ป.วิ.อ. ม.132) ไปยังบริษัทผู้ให้บริการ Payment Gateway ({gw.account_name} / {gw.bank}) ระบุเลขอ้างอิงธุรกรรม วันที่ เวลา และยอดเงิน ฿{gw.total_drained_thb:,.2f} เพื่อขอทราบข้อมูลบัญชีลูกค้าย่อย (Sub-merchant ID), ชื่อบุคคล/นิติบุคคลที่ลงทะเบียน, และบัญชีธนาคารปลายทางที่ Settlement เงินออก")
+                lines.append("   - **ขั้นที่ 2 (ขอข้อมูลแพลตฟอร์มโฆษณา):** ประสานงานส่งหมายเรียกหรือหนังสือขอพยานหลักฐานไปยังผู้ให้บริการแพลตฟอร์ม (เช่น Meta Platforms Inc. / Google / TikTok) เพื่อขอทราบ:")
+                lines.append("     - ข้อมูลระบุตัวตนเจ้าของบัญชีโฆษณา (Ad Account Owner KYC)")
+                lines.append("     - ข้อมูลแฟนเพจ/บัญชีที่ใช้ยิงแอด (Campaign Fanpage / URL)")
+                lines.append("     - ข้อมูลผู้ดูแลระบบ (Page / Ad Account Admins): ชื่อ, อีเมล, หมายเลขโทรศัพท์ที่ลงทะเบียน")
+                lines.append("     - บันทึกประวัติหมายเลข IP Address และ Timestamp ที่เข้าใช้งานและสั่งยิงแอด")
+                lines.append("   - **ขั้นที่ 3 (ระงับบัญชีโฆษณาและอายัดยอดคงเหลือ):** ขอความร่วมมือผู้ให้บริการแพลตฟอร์มระงับบัญชีโฆษณา (Ad Account Take Down) เพื่อตัดวงจรการหลอกลวงเหยื่อรายอื่น และขออายัดยอดเงินคงค้างในกระเป๋าโฆษณา (Prepaid Ad Credit Balance)")
+                lines.append("")
+        else:
+            lines.append("- ในเส้นทางเงินของผู้เสียหายรายนี้ ไม่พบการโอนตรงเข้า Payment Gateway หรือแพลตฟอร์มโฆษณา โดยเป็นการกระจายเข้าเครือข่ายบัญชีม้าบุคคลธรรมดา (Mule Tier-2) และ/หรือการถอนเงินสด/สินทรัพย์ดิจิทัลโดยตรง")
+            lines.append("")
+
+        lines.append("### 3.4 ข้อแนะนำการสืบสวนขยายผลเครือข่ายและผู้เสียหายร่วม (Cross-Victim Syndicate Expansion)")
+        if gateways:
+            lines.append("- **การเชื่อมโยงคดีผ่านแคมเปญโฆษณา (Syndicate Linkage):** แคมเปญโฆษณาที่ยิงผ่านแอดดังกล่าว ย่อมมีผู้เสียหายรายอื่นทั่วประเทศตกเป็นเหยื่อในเวลาไล่เลี่ยกัน พนักงานสอบสวนสามารถนำข้อมูล Ad Account ID, Campaign Fanpage, หรือ Merchant Reference ไปสืบค้นเชื่อมโยงกับเลขคดีในระบบแจ้งความออนไลน์ (thaipoliceonline) เพื่อรวมสำนวนและขยายผลจับกุมกลุ่มผู้บงการขบวนการคอลเซ็นเตอร์/สแกมเมอร์")
+        else:
+            lines.append("- **การตรวจสอบความเชื่อมโยงบัญชีม้า (Mule Network Linkage):** ตรวจสอบประวัติบัญชีม้าแถว 1 และแถว 2 ในฐานข้อมูล ศปอส.ตร. / AOC 1441 เพื่อหาความเชื่อมโยงกับผู้เสียหายรายอื่นในกลุ่มขบวนการเดียวกัน")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+
+        # Section 4: MILP Mathematical Proofs
+        lines.append("## 4. การรับรองความถูกต้องด้วยสมการคณิตศาสตร์เชิงเส้น (MILP Mathematical Proofs)")
         lines.append("การตรวจพิสูจน์ปฏิบัติตามหลักการอนุรักษ์กระแสเงิน (Flow Conservation) โดยใช้แบบจำลอง Mixed-Integer Linear Programming (`scipy.optimize.milp`):")
         lines.append("")
         lines.append("$$\\min_{x} \\left| \\sum_{j \\in \\text{Outflows}} x_j \\cdot O_j - \\text{Inflow} \\right| \\quad \\text{subject to} \\quad x_j \\in \\{0, 1\\}, \\; \\sum x_j \\cdot O_j \\le \\text{Inflow} + \\epsilon$$")
@@ -616,8 +718,8 @@ class VictimFlowTracer:
         lines.append("---")
         lines.append("")
 
-        # Section 4: Proportional Restitution Allocation Methodology
-        lines.append("## 4. หลักการและสูตรคำนวณสิทธิเรียกร้องเฉลี่ยทรัพย์คืน (AMLA 49/1 Formulation)")
+        # Section 5: Proportional Restitution Allocation Methodology
+        lines.append("## 5. หลักการและสูตรคำนวณสิทธิเรียกร้องเฉลี่ยทรัพย์คืน (AMLA 49/1 Formulation)")
         lines.append("ระบบใช้สูตรการปันส่วนสิทธิแบบจำเพาะกลุ่มก้อนกระแสเงิน (Cluster-Level Inflow Conservation Attribution):")
         lines.append("")
         lines.append("$$\\text{Proportional Claim}_d = \\sum_{c \\in \\text{Clusters}} \\text{Outflow}_{d,c} \\times \\min\\left(1.0, \\frac{\\text{Victim Inflow}_c}{\\text{Cluster Outflow Total}_c}\\right)$$")
@@ -628,31 +730,44 @@ class VictimFlowTracer:
         lines.append("---")
         lines.append("")
 
-        # Section 5: Urgent Directives for Investigators
-        lines.append("## 5. มาตรการเชิงสืบสวนและบัญชีเป้าหมายที่ต้องส่งคำสั่งอายัดเร่งด่วน AOC 1441")
-        lines.append("1. **การส่งคำขอระงับธุรกรรมฉุกเฉิน (72 ชั่วโมง) ต่อศูนย์ AOC 1441:**")
+        # Section 6: Actionable Directives by Target Category
+        lines.append("## 6. มาตรการเชิงสืบสวนและแนวทางปฏิบัติการจำแนกตามประเภทปลายทาง (Actionable Directives)")
+        lines.append("1. **การส่งคำขอระงับธุรกรรมฉุกเฉิน (72 ชั่วโมง) ต่อศูนย์ AOC 1441 เฉพาะบัญชีม้าบุคคลธรรมดา:**")
         lines.append("   - อาศัยอำนาจตาม พ.ร.ก. มาตรการป้องกันและปราบปรามอาชญากรรมทางเทคโนโลยี พ.ศ. 2566 มาตรา 7")
+        if result.net_residual_buffer_thb > 0:
+            lines.append(f"   - **⭐ อายัดบัญชีม้าแถว 1 (เร่งด่วนสูงสุด - มีเงินคงค้างรอฟอก):** {result.target_account} ({result.target_account_name}) — ยอดคงค้าง: **฿{result.net_residual_buffer_thb:,.2f}**")
         for d in result.top_destinations:
             if d.recommended_action == "AOC_1441_FREEZE_URGENT" and d.account_no != "UNKNOWN":
-                lines.append(f"   - **อายัดบัญชี:** {d.bank} เลขที่ `{d.account_no}` ({d.account_name}) — สิทธิเรียกร้องเฉลี่ยทรัพย์คืน: **฿{d.proportional_claim_thb:,.2f}**")
-        lines.append("2. **การประสานงานสำนักงาน ปปง. เพื่อยึดและอายัดทรัพย์สิน:**")
-        lines.append("   - ใช้รายงานวิเคราะห์ฉบับนี้พร้อมตารางผู้รับประโยชน์หลัก ประกอบคำร้องขอคุ้มครองสิทธิผู้เสียหายตาม พ.ร.บ. ปปง. พ.ศ. 2542 มาตรา 49/1")
+                lines.append(f"   - **อายัดบัญชีม้าแถว 2:** {d.bank} เลขที่ `{d.account_no}` ({d.account_name}) — สิทธิเรียกร้องเฉลี่ยทรัพย์คืน: **฿{d.proportional_claim_thb:,.2f}**")
+
+        dir_idx = 2
+        if gateways:
+            lines.append(f"{dir_idx}. **มาตรการขอพยานหลักฐานและระงับบัญชีโฆษณาตาม ป.วิ.อ. มาตรา 132 (Payment Gateway / Ad Platforms):**")
+            lines.append("   - *⚠️ ข้อควรระวัง: ห้ามส่งคำสั่งอายัดผ่าน AOC 1441 ไปยังบัญชีผู้ให้บริการรับชำระเงิน/แพลตฟอร์มโฆษณา เพราะเป็นบัญชีรวมระดับองค์กร*")
+            for d in gateways:
+                lines.append(f"   - **ออกหมายเรียก ม.132 ต่อ {d.account_name} ({d.bank} {d.account_no}):** ขอข้อมูล Sub-merchant ID, Ad Account KYC, Campaign Fanpage, IP Logs และระงับบัญชีโฆษณา (ยอดเงินที่ไหลเข้า: ฿{d.proportional_claim_thb:,.2f})")
+            dir_idx += 1
+
+        lines.append(f"{dir_idx}. **การประสานงานสำนักงาน ปปง. เพื่อยึดและอายัดทรัพย์สิน (AMLA 49/1 Restitution):**")
+        lines.append(f"   - ใช้รายงานวิเคราะห์ฉบับนี้พร้อมตารางผู้รับประโยชน์หลัก ประกอบคำร้องขอคุ้มครองสิทธิผู้เสียหายตาม พ.ร.บ. ปปง. พ.ศ. 2542 มาตรา 49/1 ยอดเรียกร้องรวม **฿{result.total_claimable_thb:,.2f}**")
+        dir_idx += 1
+
         vasp_targets = [d for d in result.top_destinations if d.recommended_action == "VASP_WALLET_FREEZE"]
         if vasp_targets:
-            lines.append("3. **การส่งคำสั่งระงับกระเป๋าเงินและคำสั่งซื้อขายสินทรัพย์ดิจิทัล (VASP Freeze Request):**")
+            lines.append(f"{dir_idx}. **การส่งคำสั่งระงับกระเป๋าเงินและคำสั่งซื้อขายสินทรัพย์ดิจิทัล (VASP Freeze Request):**")
             for d in vasp_targets:
                 lines.append(f"   - **ระงับกระเป๋าเงิน/P2P Escrow:** {d.bank} ร้านค้า `{d.account_name}` ({d.account_no}) — วงเงิน: **฿{d.proportional_claim_thb:,.2f}**")
-            lines.append("4. **การขอพยานหลักฐานทางนิติวิทยาศาสตร์ดิจิทัลเพิ่มเติม:**")
-        else:
-            lines.append("3. **การขอพยานหลักฐานทางนิติวิทยาศาสตร์ดิจิทัลเพิ่มเติม:**")
+            dir_idx += 1
+
+        lines.append(f"{dir_idx}. **การขอพยานหลักฐานทางนิติวิทยาศาสตร์ดิจิทัลเพิ่มเติม:**")
         lines.append("   - ทำหนังสือขอภาพบันทึกจากกล้อง CCTV บริเวณตู้ ATM ในช่วงเวลาที่มีการทำรายการถอนเงินสดไม่ใช้บัตร (Cardless ATM Cash-out)")
         lines.append("   - ทำหนังสือขอข้อมูลการยืนยันตัวตน (KYC) และประวัติการทำธุรกรรม P2P จากผู้ประกอบธุรกิจสินทรัพย์ดิจิทัล (VASP)")
         lines.append("")
         lines.append("---")
         lines.append("")
 
-        # Section 6: Cryptographic Chain of Custody
-        lines.append("## 6. การรับรองความถูกต้องของพยานหลักฐานและห่วงโซ่การครอบครอง (Chain of Custody)")
+        # Section 7: Cryptographic Chain of Custody
+        lines.append("## 7. การรับรองความถูกต้องของพยานหลักฐานและห่วงโซ่การครอบครอง (Chain of Custody)")
         lines.append(f"- **Statement Provenance SHA-256:** `{result.statement_sha256}`")
         lines.append(f"- **สถานะความถูกต้อง (Integrity Status):** VERIFIED (ไม่พบการดัดแปลงหรือแทรกแซงข้อมูล)")
         lines.append(f"- **การยอมรับตามกฎหมาย:** พยานหลักฐานทางวิทยาศาสตร์และข้อมูลอิเล็กทรอนิกส์ตาม ป.วิ.อ. มาตรา 226 และ พ.ร.บ. ธุรกรรมทางอิเล็กทรอนิกส์ พ.ศ. 2544 มาตรา 26")

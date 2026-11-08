@@ -59,6 +59,8 @@ class VictimDashboardGenerator:
                 color = "#fb923c"
             elif d.recommended_action == "VASP_WALLET_FREEZE":
                 color = "#c084fc"
+            elif d.recommended_action == "PLATFORM_SUBPOENA_EVIDENCE":
+                color = "#eab308"
 
             sankey_nodes_dict[dest_name] = {"name": dest_name, "itemStyle": {"color": color}}
             sankey_links.append({
@@ -82,14 +84,17 @@ class VictimDashboardGenerator:
         tier2_mules = [d for d in result.top_destinations if d.recommended_action == "AOC_1441_FREEZE_URGENT"]
         atm_cashing = [d for d in result.top_destinations if d.recommended_action == "CCTV_INSPECTION_ATM"]
         vasp_p2p = [d for d in result.top_destinations if d.recommended_action == "VASP_WALLET_FREEZE"]
+        gateways = [d for d in result.top_destinations if d.recommended_action == "PLATFORM_SUBPOENA_EVIDENCE"]
 
         tot_tier2_claim = sum(d.proportional_claim_thb for d in tier2_mules)
         tot_atm_claim = sum(d.proportional_claim_thb for d in atm_cashing)
         tot_vasp_claim = sum(d.proportional_claim_thb for d in vasp_p2p)
+        tot_gateway_claim = sum(d.proportional_claim_thb for d in gateways)
         res_buf = result.net_residual_buffer_thb
 
         pie_data = [
             {"name": "บัญชีม้าแถว 2 (Mule Tier-2)", "value": round(tot_tier2_claim, 2), "itemStyle": {"color": "#38bdf8"}},
+            {"name": "ระบบชำระเงิน/ค่าโฆษณา (Gateway/Ads)", "value": round(tot_gateway_claim, 2), "itemStyle": {"color": "#eab308"}},
             {"name": "ถอนเงินสดตู้ ATM (Cash-Out)", "value": round(tot_atm_claim, 2), "itemStyle": {"color": "#fb923c"}},
             {"name": "สินทรัพย์ดิจิทัล P2P (Crypto Off-Ramp)", "value": round(tot_vasp_claim, 2), "itemStyle": {"color": "#c084fc"}},
             {"name": "เงินค้างในบัญชีม้า (Residual Buffer)", "value": round(res_buf, 2), "itemStyle": {"color": "#64748b"}},
@@ -278,10 +283,17 @@ class VictimDashboardGenerator:
 
         for d in result.top_destinations:
             action_badge = '<span class="px-2.5 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-md text-xs font-semibold">🚨 AOC 1441 อายัดด่วน</span>'
+            btn_action = f"""<button onclick='copyAocSingle("{d.bank}", "{d.account_no}", "{d.account_name}", {d.proportional_claim_thb:.2f})' class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-xs rounded transition text-slate-200">Copy AOC</button>"""
             if d.recommended_action == "CCTV_INSPECTION_ATM":
                 action_badge = '<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-md text-xs font-semibold">📹 ขอภาพ CCTV ตู้ ATM</span>'
+                btn_action = f"""<button onclick='navigator.clipboard.writeText("ขอภาพ CCTV ตู้ {d.bank} บัญชี {d.account_no} ยอด ฿{d.proportional_claim_thb:,.2f}"); showToast("คัดลอกคำขอ CCTV แล้ว");' class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-xs rounded transition text-slate-200">Copy Ref</button>"""
             elif d.recommended_action == "VASP_WALLET_FREEZE":
                 action_badge = '<span class="px-2.5 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-md text-xs font-semibold">🔒 อายัดกระเป๋า VASP P2P</span>'
+                btn_action = f"""<button onclick='navigator.clipboard.writeText("ระงับกระเป๋า VASP {d.account_name} ({d.account_no}) ยอด ฿{d.proportional_claim_thb:,.2f}"); showToast("คัดลอกคำขอ VASP แล้ว");' class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-xs rounded transition text-slate-200">Copy Ref</button>"""
+            elif d.recommended_action == "PLATFORM_SUBPOENA_EVIDENCE":
+                action_badge = '<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-md text-xs font-semibold">📋 หมายเรียก ม.132 / ระงับแอด</span>'
+                clean_acct_name = d.account_name.replace('"', '')
+                btn_action = f"""<button onclick='navigator.clipboard.writeText("หมายเรียก ป.วิ.อ. ม.132 ขอข้อมูลบัญชีและระงับบัญชีโฆษณา: {clean_acct_name} ({d.bank} {d.account_no}) วงเงิน ฿{d.proportional_claim_thb:,.2f}"); showToast("คัดลอกคำขอหมายเรียก ม.132 แล้ว");' class="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-xs rounded transition text-white">Copy ม.132</button>"""
 
             row_html = f"""
             <tr class="hover:bg-slate-800/60 transition border-b border-slate-800/80 dest-row" data-bank="{d.bank}" data-name="{d.account_name}">
@@ -298,9 +310,7 @@ class VictimDashboardGenerator:
                 <td class="py-3 px-4 text-center font-mono text-xs text-slate-400">{d.avg_latency_minutes:.1f} น.</td>
                 <td class="py-3 px-4 text-center">{action_badge}</td>
                 <td class="py-3 px-4 text-center">
-                    <button onclick='copyAocSingle("{d.bank}", "{d.account_no}", "{d.account_name}", {d.proportional_claim_thb:.2f})' class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-xs rounded transition text-slate-200">
-                        Copy AOC
-                    </button>
+                    {btn_action}
                 </td>
             </tr>
             """
@@ -338,6 +348,59 @@ class VictimDashboardGenerator:
             </div>
             """
             cluster_rows.append(c_html)
+
+        # Golden Window Card HTML
+        golden_window_card_html = ""
+        res_ratio = (result.net_residual_buffer_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
+        if result.net_residual_buffer_thb >= 50000.0 or res_ratio >= 20.0:
+            golden_window_card_html = f"""
+            <div class="p-4 bg-emerald-950/40 rounded-xl border border-emerald-500/50 text-xs space-y-1.5 shadow-lg">
+                <div class="flex items-center gap-2">
+                    <span class="text-base">⭐</span>
+                    <span class="font-bold text-emerald-300 text-sm">ตรวจพบโอกาสทองในการอายัดทรัพย์สินคืน (Primary Golden Window Target)</span>
+                </div>
+                <p class="text-slate-200 leading-relaxed">
+                    ตรวจพบเงินคงค้างในบัญชีม้าแถว 1 (<b>{result.target_account}</b> {result.target_account_name}) สูงถึง <b class="text-emerald-400 font-mono text-sm">฿{result.net_residual_buffer_thb:,.2f}</b> ({res_ratio:.1f}%) แนะนำให้พนักงานสอบสวนเร่งส่งคำสั่งระงับธุรกรรมบัญชีม้าแถว 1 นี้เป็นลำดับแรกสุดทันทีผ่าน AOC 1441
+                </p>
+            </div>
+            """
+
+        # Gateway Subpoena Card HTML
+        gateway_subpoena_card_html = ""
+        if gateways:
+            gw_items = []
+            for gw in gateways:
+                clean_name = gw.account_name.replace('"', '')
+                gw_items.append(f"""
+                <div class="p-3 bg-slate-800/80 rounded-lg border border-amber-500/30 flex items-center justify-between">
+                    <div>
+                        <div class="font-mono text-amber-400 font-bold text-xs">{gw.bank} {gw.account_no}</div>
+                        <div class="font-semibold text-white mt-0.5">{gw.account_name}</div>
+                        <div class="text-xs text-slate-400 mt-0.5">ยอดไหลเข้า: <b class="text-emerald-400 font-mono">฿{gw.proportional_claim_thb:,.2f}</b> ({gw.percentage_of_victim_funds:.1f}%)</div>
+                    </div>
+                    <button onclick='navigator.clipboard.writeText("หมายเรียก ป.วิ.อ. ม.132 ขอข้อมูลบัญชีและระงับบัญชีโฆษณา: {clean_name} ({gw.bank} {gw.account_no}) วงเงิน ฿{gw.proportional_claim_thb:,.2f}"); showToast("คัดลอกคำขอหมายเรียก ม.132 แล้ว");' class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold transition shrink-0 ml-2">
+                        Copy ม.132
+                    </button>
+                </div>
+                """)
+            gw_items_str = "".join(gw_items)
+            gateway_subpoena_card_html = f"""
+            <div class="p-4 bg-amber-950/30 rounded-xl border border-amber-500/40 text-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">📋</span>
+                        <span class="font-bold text-amber-300 text-sm">มาตรการขอพยานหลักฐาน ป.วิ.อ. ม.132 & ระงับบัญชีโฆษณา ({len(gateways)} ปลายทาง)</span>
+                    </div>
+                    <span class="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-xs font-semibold">ป.วิ.อ. ม.132</span>
+                </div>
+                <p class="text-slate-300 leading-relaxed">
+                    <b class="text-rose-400 font-bold">⚠️ ข้อควรระวังเด็ดขาด:</b> บัญชีด้านล่างเป็น <b>Corporate Clearing Pool / Payment Gateway</b> ห้ามส่งคำสั่งอายัดผ่าน AOC 1441 เพราะจะถูกธนาคารปฏิเสธ ให้ใช้หมายเรียกพยานเอกสาร ม.132 ไปยังตัวแทนรับชำระและแพลตฟอร์มเพื่อขอข้อมูล Sub-merchant ID, Ad Account KYC, IP Logs และระงับบัญชีโฆษณา
+                </p>
+                <div class="space-y-2">
+                    {gw_items_str}
+                </div>
+            </div>
+            """
 
         html = f"""<!DOCTYPE html>
 <html lang="th" class="dark">
@@ -631,6 +694,10 @@ class VictimDashboardGenerator:
                                 <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span> บัญชีม้าแถว 2 (Mule Tier-2)</span>
                                 <b class="font-mono text-emerald-400">฿{tot_tier2_claim:,.2f}</b>
                             </div>
+                            <div class="flex justify-between items-center p-2 rounded-lg bg-slate-800/40" style="display: {'flex' if tot_gateway_claim > 0 else 'none'}">
+                                <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> ระบบชำระเงิน/ค่าแอด (Gateway/Ads)</span>
+                                <b class="font-mono text-amber-300">฿{tot_gateway_claim:,.2f}</b>
+                            </div>
                             <div class="flex justify-between items-center p-2 rounded-lg bg-slate-800/40">
                                 <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span> ถอนเงินสดตู้ ATM (Cash-Out)</span>
                                 <b class="font-mono text-slate-300">฿{tot_atm_claim:,.2f}</b>
@@ -826,6 +893,8 @@ class VictimDashboardGenerator:
                     </div>
 
                     <div class="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                        {golden_window_card_html}
+
                         {''.join([f'''
                         <div class="p-4 bg-slate-800/60 rounded-xl border border-rose-500/20 flex items-center justify-between">
                             <div>
@@ -838,6 +907,8 @@ class VictimDashboardGenerator:
                             </button>
                         </div>
                         ''' for t in aoc_freeze_targets])}
+
+                        {gateway_subpoena_card_html}
                     </div>
 
                     <!-- AMLA 49/1 Info -->
