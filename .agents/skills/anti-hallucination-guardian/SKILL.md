@@ -42,6 +42,11 @@ Provides rigorous grounding protocols, token-optimized verification gates, and a
    - DO NOT autonomously generate or export Court Dossiers (`*.pdf`, `--output-pdf`, `--output-md`) or AOC 1441 Emergency Freezing Orders (`*.json`, `--output-aoc`).
    - Transition to generating legal dossiers or freeze JSON payloads ONLY if the user prompt explicitly requests them using trigger keywords (e.g., `"pdf"`, `"dossier"`, `"สำนวนคดี"`, `"สร้างสำนวน"`, `"aoc"`, `"อายัดฉุกเฉิน"`).
 
+7. **The Quarto Document Conversion & Typography Rule**:
+   - Mandate Quarto (`src.dossier.quarto_converter` / `quarto render`) when converting Markdown reports to DOCX or PDF.
+   - **Pre-flight Quarto Gate**: Deterministically verify Quarto installation (`is_quarto_installed()`) before attempting conversion. If not installed, immediately ask the user for confirmation to install Quarto. Never fail silently, fake installation, or fall back to tools that degrade Mermaid diagram rendering without user authorization.
+   - **Typography**: Enforce `TH Sarabun New` as the primary font for headings, body text, and tables. Enforce an appropriate mathematical font (`Cambria Math` in DOCX, `STIX Two Math` / `Cambria Math` in Typst PDF) for formulas and symbols. Embed Mermaid diagrams as high-resolution PNG images.
+
 ---
 
 ## 2. Hallucination Detection & Prevention Workflows

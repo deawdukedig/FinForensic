@@ -69,3 +69,11 @@ The Quality Checker rigorously evaluates 7 mandatory dimensions:
 3. **Corrective Remediation Directives**: คำแนะนำการปรับปรุงแก้ไขสำนวนรายงานก่อนเสนอหัวหน้าพนักงานสอบสวนหรือผู้เชี่ยวชาญลงนาม.
 
 Label results: **"Forensic Quality Assurance Audit. Not an Admissibility Ruling."**
+
+### 8. Quarto Document Conversion & Typography Governance (Iron Law)
+- [ ] เมื่อมีการแปลงรายงาน Markdown เป็น Word (`.docx`) หรือ PDF (`.pdf`):
+  - ใช้ Quarto Engine เสมอ (`src.dossier.quarto_converter` หรือ `quarto render`).
+  - ตรวจสอบสถานะการติดตั้ง Quarto ก่อนดำเนินการ หากยังไม่ได้ติดตั้ง ต้องถามผู้ใช้เพื่อขอยืนยันการติดตั้งก่อนเสมอ.
+  - ฟอนต์หลักของเอกสาร (Heading, Body, Table) ต้องเป็น `TH Sarabun New`.
+  - ฟอนต์สมการทางคณิตศาสตร์และสัญลักษณ์ (Equations & Math Symbols) ต้องใช้ฟอนต์สากลที่เหมาะสม (`Cambria Math` ใน DOCX / `STIX Two Math` ใน PDF Typst).
+  - บล็อก Mermaid ในไฟล์ต้นทางต้องถูกคอมไพล์เป็นรูปภาพ PNG ฝังในเอกสาร ไม่เหลือเป็นข้อความโค้ดดิบ.

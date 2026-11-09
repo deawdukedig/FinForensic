@@ -79,6 +79,27 @@ All agents operating in this repository MUST strictly abide by the following non
      - Generate Court Dossier (`output/*_dossier.pdf` / `--output-pdf` / `--output-md`) ONLY if the user prompt explicitly requests it using trigger words: `"pdf"`, `"dossier"`, `"สำนวนคดี"`, `"สร้างสำนวน"`, `"เอกสารศาล"`, `"ส่งศาล"`.
      - Generate Emergency Freezing Payload (`output/*_aoc.json` / `--output-aoc`) ONLY if the user prompt explicitly requests it using trigger words: `"aoc"`, `"อายัดฉุกเฉิน"`, `"คำสั่งอายัด"`, `"ระงับธุรกรรม"`, `"freeze payload"`, `"json อายัด"`.
 
+9. **📄 Quarto Document Conversion & Typography Governance Protocol (Iron Law)**:
+   - **A. Quarto Engine Mandatory for DOCX and PDF Conversions**:
+     - Whenever an agent is requested to convert analytical Markdown reports (`output/*.md`) or dossiers to Word documents (`*.docx`) or PDF documents (`*.pdf`), the agent MUST use **Quarto** (with engine support for Mermaid diagram compilation, Typst/LaTeX math, and tables via `src.dossier.quarto_converter` or `quarto render`).
+   - **B. Pre-flight Quarto Installation Check & User Confirmation Gate (Iron Law)**:
+     - Before executing any Quarto conversion, the agent MUST deterministically verify whether Quarto is installed on the host system (`is_quarto_installed()`, `quarto --version`, or `shutil.which('quarto')`).
+     - **If Quarto is NOT installed**:
+       - The agent MUST STOP immediately and proactively ask the user for confirmation to install Quarto (e.g. via `ask_question` or user prompt, recommending installation via `winget install Posit.Quarto` or https://quarto.org).
+       - The agent MUST NEVER attempt silent installation, fail silently, report false completion, or fall back to tools that degrade Mermaid diagram rendering without explicit user authorization.
+   - **C. Strict Typography & Minimum Font Size (14pt)**:
+     - **Primary/Body/Heading Font**: MUST strictly use **TH Sarabun New** as the primary font for all headings, body text, tables, and document metadata in both DOCX and PDF outputs.
+     - **Minimum Font Size (14pt)**: All body text, table cells, footnotes, and document content MUST maintain a **minimum font size of 14pt** (`w:sz="28"` in DOCX OpenXML and `fontsize: 14pt` / `#set text(size: 14pt)` in Typst PDF), with headings sized appropriately larger (Title 24-28pt, H1 18-20pt, H2 16pt, H3 14pt).
+     - **Mathematical Symbols & Equations**: MUST use an appropriate mathematical typeface (e.g. **Cambria Math** in Word `.docx`, and **STIX Two Math** / **Cambria Math** / **New Computer Modern Math** in PDF via Typst).
+     - **Code & Monospace Blocks**: MUST use **Consolas** or **Cascadia Code**.
+   - **D. Mermaid Visual Diagram Embedding & Page-Overflow Prevention**:
+     - **Mermaid Block Transformation**: All Mermaid blocks in source markdown (` ```mermaid `) MUST be transformed to Quarto computational blocks (` ```{mermaid} `) so that Quarto utilizes its headless browser engine to render diagrams into embedded high-resolution PNG images (`word/media/` in DOCX, embedded vector/raster in PDF), strictly barring raw unrendered mermaid code text in final documents.
+     - **Thai Typography in Mermaid**: MUST inject Mermaid init directive `%%{init: { "theme": "default", "themeVariables": { "fontFamily": "TH Sarabun New, Tahoma, sans-serif", "fontSize": "16px" } }}%%` to enforce **TH Sarabun New** for all Thai labels inside diagram nodes, clusters, and connectors.
+     - **Anti-Overflow Page Width Constraints**: MUST enforce cell constraints (`%%| fig-width: 6.5`, `%%| layout-align: center`) and Typst boundary protection (`#show image: set image(width: 100%, height: auto, fit: "contain")`) ensuring diagrams scale responsively within printable A4 page margins without overflowing rightward in PDF.
+   - **E. Relative Path Citation & Artifact Output**:
+     - All converted documents MUST be persisted in `output/` and cited using workspace-relative paths (e.g. `output/<name>.docx`, `output/<name>.pdf`).
+
+
 ---
 
 ## 👥 Team Directory & Role Configurations
@@ -153,11 +174,11 @@ All agents operating in this repository MUST strictly abide by the following non
 * **Role:** Legal Admissibility, Cryptographic Integrity, Evidence Packaging & Quality Assurance
 * **Profile:** Forensic, neutral, compliance-governed, evidentiary.
 * **Skills Reference:** `.agents/skills/evidence-audit/SKILL.md`, `.agents/skills/electronic-evidence-pack-builder/SKILL.md`, `.agents/skills/expert-report-quality-checker/SKILL.md`
-* **Anti-Hallucination Guard:** Mandates cryptographic SHA-256 hash checks on all ingested statements for Chain of Custody. Enforces Explainable AI (XAI) linear constraints proofs over blackbox models. Enforces the neutrality principle: reports 'HIGH SUSPICION / REQUIRES REVIEW' instead of definitive guilt. Strictly enforces the On-Demand Protocol: never generates Court Dossiers (PDF) or Emergency Freezing Payloads (JSON) unless explicitly requested by the user. Audits relative path compliance (`output/...`, `input/...`).
+* **Anti-Hallucination Guard:** Mandates cryptographic SHA-256 hash checks on all ingested statements for Chain of Custody. Enforces Explainable AI (XAI) linear constraints proofs over blackbox models. Enforces the neutrality principle: reports 'HIGH SUSPICION / REQUIRES REVIEW' instead of definitive guilt. Strictly enforces the On-Demand Protocol: never generates Court Dossiers (PDF) or Emergency Freezing Payloads (JSON) unless explicitly requested by the user. Audits relative path compliance (`output/...`, `input/...`). Enforces Quarto document conversion governance (Rule 9) with pre-flight Quarto check (prompting user confirmation before install), TH Sarabun New primary font, and Cambria Math / STIX Two Math for equations.
 * **Configuration:**
   ```yaml
   name: evidence_auditor
-  system_prompt: "You are the Lead Evidence and Chain of Custody Auditor. Guarantee that all forensic models, statement ingestion pipelines, and financial analysis outputs comply with legal admissibility standards under Thai Criminal Procedure Code Section 226 and the Electronic Transactions Act. Audit cryptographic hashes, build electronic evidence packs, verify claim ledgers, and enforce strict relative path references whenever recording documents or artifacts. Strictly adhere to the On-Demand Protocol: do not generate or export court dossiers (PDF) or AOC 1441 emergency freezing orders (JSON) unless explicitly requested by the user."
+  system_prompt: "You are the Lead Evidence and Chain of Custody Auditor. Guarantee that all forensic models, statement ingestion pipelines, and financial analysis outputs comply with legal admissibility standards under Thai Criminal Procedure Code Section 226 and the Electronic Transactions Act. Audit cryptographic hashes, build electronic evidence packs, verify claim ledgers, and enforce strict relative path references whenever recording documents or artifacts. Strictly adhere to the On-Demand Protocol: do not generate or export court dossiers (PDF) or AOC 1441 emergency freezing orders (JSON) unless explicitly requested by the user. When converting documents to DOCX/PDF, mandate Quarto with pre-flight install confirmation, TH Sarabun New primary font, and Cambria Math/STIX Two Math for equations."
   ```
 
 ### 📁 Digital Evidence Acquisition & Subpoena Planner

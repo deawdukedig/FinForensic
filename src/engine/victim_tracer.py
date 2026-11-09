@@ -131,6 +131,49 @@ def slugify_victim_name(name: str) -> str:
     return f"victim_{h}"
 
 
+
+TABLE_RESPONSIVE_STYLE = """<style>
+/* Responsive & Print-Optimized Table Layout (No Horizontal Scrollbar) */
+table {
+  display: table !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  border-collapse: collapse !important;
+  table-layout: auto !important;
+  font-size: 13px !important;
+  overflow: visible !important;
+}
+th, td {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+  padding: 6px 5px !important;
+}
+@media print {
+  body {
+    font-size: 10pt !important;
+  }
+  table {
+    display: table !important;
+    width: 100% !important;
+    table-layout: auto !important;
+    font-size: 8.5pt !important;
+    page-break-inside: auto !important;
+  }
+  tr {
+    page-break-inside: avoid !important;
+  }
+  th, td {
+    padding: 3px 3px !important;
+    word-break: break-word !important;
+  }
+  thead {
+    display: table-header-group !important;
+  }
+}
+</style>
+"""
+
 class VictimFlowTracer:
     """
     Forensic engine dedicated to tracking a specific victim's funds
@@ -377,6 +420,17 @@ class VictimFlowTracer:
             total_claimable_thb=total_claimable,
         )
 
+    @staticmethod
+    def _format_action_th(action: str) -> str:
+        """Formats action enum into clean, wrap-friendly Thai text without backticks to prevent table overflow."""
+        mapping = {
+            "AOC_1441_FREEZE_URGENT": "AOC 1441 อายัดด่วน",
+            "PLATFORM_SUBPOENA_EVIDENCE": "ม.132 ขอพยานแพลตฟอร์ม",
+            "CCTV_INSPECTION_ATM": "CCTV ตรวจกล้อง ATM",
+            "VASP_WALLET_FREEZE": "อายัดกระเป๋า VASP",
+        }
+        return mapping.get(action, action.replace("_", " "))
+
     def generate_dispersal_mermaid(self, result: VictimTraceResult) -> str:
         """Generates a court-admissible Mermaid flowchart visualizing the victim's fund dispersal."""
         lines = [
@@ -483,6 +537,7 @@ class VictimFlowTracer:
     ) -> str:
         """Generates court-admissible 1-page forensic evidence dossier for the victim."""
         lines = []
+        lines.append(TABLE_RESPONSIVE_STYLE)
         lines.append(f"# สำนวนการตรวจพิสูจน์เส้นทางการเงินเฉพาะผู้เสียหาย (Victim Money Trail Dossier)")
         lines.append(f"**เลขที่สำนวนคดี (Case ID):** `{case_id}`  ")
         lines.append(f"**ผู้ตรวจพิสูจน์ (Forensic Investigator):** {officer}  ")
@@ -513,13 +568,15 @@ class VictimFlowTracer:
         lines.append("### แผนภาพแสดงเส้นทางการกระจายเงิน (Fund Dispersal Topology):")
         lines.append(self.generate_dispersal_mermaid(result))
         lines.append("")
-        lines.append("| ลำดับ | ธนาคาร / เลขที่บัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออกรวม | ยอดสิทธิเรียกร้องของผู้เสียหาย | สัดส่วน (%) | มาตรการที่แนะนำ |")
-        lines.append("| :---: | :--- | :--- | :--- | :---: | :---: | :---: | :--- |")
+        pct_claim = (result.total_claimable_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
+        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน | มาตรการแนะนำ |")
+        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |")
 
         for d in result.top_destinations:
-            acct_info = f"{d.bank} `{d.account_no}`" if d.account_no != "UNKNOWN" else d.bank
+            acct_info = f"{d.bank} {d.account_no}" if d.account_no != "UNKNOWN" else d.bank
+            action_th = self._format_action_th(d.recommended_action)
             lines.append(
-                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | `{d.recommended_action}` |"
+                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | {action_th} |"
             )
 
         tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)
@@ -576,6 +633,7 @@ class VictimFlowTracer:
         Persisted automatically to output/victim_<name_slug>_analysis.md.
         """
         lines = []
+        lines.append(TABLE_RESPONSIVE_STYLE)
         lines.append("# รายงานวิเคราะห์เส้นทางการเงินเชิงลึกเฉพาะผู้เสียหาย (Victim Forensic Analysis Report)")
         lines.append(f"**เลขที่สำนวนคดี (Case ID):** `{case_id}`  ")
         lines.append(f"**ผู้ตรวจพิสูจน์ (Forensic Investigator):** {officer}  ")
@@ -609,13 +667,14 @@ class VictimFlowTracer:
         lines.append("### แผนภาพแสดงเส้นทางการกระจายเงิน (Fund Dispersal Topology):")
         lines.append(self.generate_dispersal_mermaid(result))
         lines.append("")
-        lines.append("| ลำดับ | ธนาคาร / เลขที่บัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออกรวม (฿) | ยอดสิทธิเรียกร้อง (฿) | สัดส่วน (%) | มาตรการที่แนะนำ |")
-        lines.append("| :---: | :--- | :--- | :--- | :---: | :---: | :---: | :--- |")
+        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน | มาตรการแนะนำ |")
+        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |")
 
         for d in result.top_destinations:
-            acct_info = f"{d.bank} `{d.account_no}`" if d.account_no != "UNKNOWN" else d.bank
+            acct_info = f"{d.bank} {d.account_no}" if d.account_no != "UNKNOWN" else d.bank
+            action_th = self._format_action_th(d.recommended_action)
             lines.append(
-                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | `{d.recommended_action}` |"
+                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | {action_th} |"
             )
 
         tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)

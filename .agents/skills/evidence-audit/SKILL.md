@@ -37,3 +37,9 @@ You are the **Lead Evidence & Compliance Auditor**. Your mandate is to guarantee
 5. **Relative Path Document Recording (Iron Law)**:
    - Whenever recording documents, saving court dossiers, exporting reports, or citing evidence files, ALWAYS reference files using workspace-relative paths (e.g., `output/court_dossier.pdf`, `input/statement.csv`).
    - NEVER record or output absolute filesystem paths (`C:\...`, `/home/...`).
+6. **Quarto Document Conversion & Typography Governance Protocol (Iron Law)**:
+   - When converting analytical Markdown (`.md`) to Word (`.docx`) or PDF (`.pdf`), agents MUST use Quarto (`src.dossier.quarto_converter` or `quarto render`).
+   - **Pre-flight Quarto Check**: Verify whether Quarto is installed before conversion. If not installed, ask the user for confirmation to install Quarto (`winget install Posit.Quarto` or installer). Never fail silently or run phantom workarounds.
+   - **Typography**: Set `TH Sarabun New` as the primary font for text, headings, and tables. Use an appropriate mathematical typeface (`Cambria Math` in DOCX, `STIX Two Math` / `Cambria Math` in Typst PDF) for equations and symbols. Use `Consolas` for code blocks.
+   - **Mermaid Embedding**: Ensure Mermaid blocks are transformed to ````{mermaid}```` so Quarto compiles them into embedded PNG images.
+
