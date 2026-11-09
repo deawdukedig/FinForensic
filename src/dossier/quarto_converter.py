@@ -37,18 +37,38 @@ class QuartoNotInstalledError(RuntimeError):
         super().__init__(message)
 
 
+def get_quarto_bin() -> Optional[str]:
+    """Finds Quarto executable in PATH or standard installation directories."""
+    q = shutil.which("quarto")
+    if q:
+        return q
+    default_candidates = [
+        Path(r"C:\Program Files\Quarto\bin\quarto.exe"),
+        Path(r"C:\Program Files (x86)\Quarto\bin\quarto.exe"),
+        Path(os.path.expanduser(r"~\AppData\Local\Programs\Quarto\bin\quarto.exe")),
+    ]
+    for cand in default_candidates:
+        if cand.exists():
+            bin_dir = str(cand.parent)
+            if bin_dir not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+            return str(cand)
+    return None
+
+
 def is_quarto_installed() -> bool:
-    """Checks whether the Quarto CLI executable is available in PATH."""
-    return shutil.which("quarto") is not None
+    """Checks whether the Quarto CLI executable is available in PATH or standard paths."""
+    return get_quarto_bin() is not None
 
 
 def get_quarto_version() -> Optional[str]:
     """Retrieves the installed Quarto version, or None if not installed."""
-    if not is_quarto_installed():
+    qb = get_quarto_bin()
+    if not qb:
         return None
     try:
         res = subprocess.run(
-            ["quarto", "--version"],
+            [qb, "--version"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -77,7 +97,7 @@ def ensure_docx_reference_template(template_path: Optional[Path] = None) -> Path
     raw_ref = TEMPLATES_DIR / "pandoc-base-reference.docx"
     try:
         subprocess.run(
-            ["quarto", "pandoc", "-o", str(raw_ref), "--print-default-data-file", "reference.docx"],
+            [get_quarto_bin() or "quarto", "pandoc", "-o", str(raw_ref), "--print-default-data-file", "reference.docx"],
             check=True,
             capture_output=True,
             timeout=15,
@@ -298,7 +318,7 @@ def convert_document(
 
         # Run Quarto with target filename
         cmd = [
-            "quarto",
+            get_quarto_bin() or "quarto",
             "render",
             str(temp_qmd.as_posix()),
             "--to",

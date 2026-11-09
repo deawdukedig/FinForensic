@@ -301,47 +301,47 @@ class ForensicDashboardGenerator:
             combined = f"{item['bank']} {item['acct']} {item['name']} {' '.join(item['channels'])}".lower()
             if any(w in combined for w in ["atm", "cardless", "ถอนสด", "กดเงิน"]):
                 item["action"] = "CCTV_INSPECTION_ATM"
-                item["badge"] = '<span class="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded text-[11px] font-semibold">📹 ภาพ CCTV ATM</span>'
+                item["badge"] = '<span class="px-2 py-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded text-[11px] font-semibold">📹 ภาพ CCTV ATM</span>'
             elif any(w in combined for w in ["p2p", "binance", "bitkub", "crypto", "usdt", "vasp", "satang"]):
                 item["action"] = "VASP_WALLET_FREEZE"
-                item["badge"] = '<span class="px-2 py-0.5 bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded text-[11px] font-semibold">🔒 อายัดกระเป๋า VASP</span>'
+                item["badge"] = '<span class="px-2 py-0.5 bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30 rounded text-[11px] font-semibold">🔒 อายัดกระเป๋า VASP</span>'
             elif any(w in combined for w in [
                 "meta ads", "facebook ads", "fb ads", "google ads", "tiktok ads", "line ads", "twitter ads",
                 "kgp", "kasikorn global payment", "2c2p", "omise", "opn", "gb prime", "paysolutions",
                 "ksher", "truemoney merchant", "payment gateway", "gateway", "merchant pool", "billing"
             ]):
                 item["action"] = "PLATFORM_SUBPOENA_EVIDENCE"
-                item["badge"] = '<span class="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 rounded text-[11px] font-semibold">📋 หมายเรียก ม.132</span>'
+                item["badge"] = '<span class="px-2 py-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 rounded text-[11px] font-semibold">📋 หมายเรียก ม.132</span>'
             else:
                 item["action"] = "AOC_1441_FREEZE_URGENT"
-                item["badge"] = '<span class="px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded text-[11px] font-semibold">🚨 AOC 1441 อายัดด่วน</span>'
+                item["badge"] = '<span class="px-2 py-0.5 bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 rounded text-[11px] font-semibold">🚨 AOC 1441 อายัดด่วน</span>'
 
         # Build Inflow Table Rows HTML
         inflow_table_rows = []
         for idx, row in enumerate(sorted_inflows, 1):
             pct = (row["total_amount"] / total_in * 100.0) if total_in > 0 else 0.0
             avg_amt = row["total_amount"] / row["tx_count"] if row["tx_count"] > 0 else 0.0
-            rank_badge = f'<span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold {"bg-amber-500/20 text-amber-300 border border-amber-500/40" if idx == 1 else ("bg-slate-700 text-slate-200" if idx <= 3 else "text-slate-400")}">{idx}</span>'
+            rank_badge = f'<span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold {"bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40" if idx == 1 else ("bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200" if idx <= 3 else "text-slate-500 dark:text-slate-400")}">{idx}</span>'
             clean_name = row["name"].replace('"', '')
             clean_acct = row["acct"].replace('"', '')
             inflow_table_rows.append(f"""
-            <tr class="hover:bg-slate-800/60 transition border-b border-slate-700/50 cp-inflow-row" data-bank="{row['bank']}" data-acct="{clean_acct}" data-name="{clean_name}">
+            <tr class="hover:bg-slate-100 dark:hover:bg-slate-800/60 transition border-b border-slate-200 dark:border-slate-700/50 cp-inflow-row" data-bank="{row['bank']}" data-acct="{clean_acct}" data-name="{clean_name}">
                 <td class="p-3 text-center">{rank_badge}</td>
                 <td class="p-3">
-                    <span class="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono text-sky-400 font-semibold">{row['bank']}</span>
-                    <span class="font-mono text-xs text-slate-200 ml-1.5">{clean_acct}</span>
+                    <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs font-mono text-sky-700 dark:text-sky-400 font-semibold">{row['bank']}</span>
+                    <span class="font-mono text-xs text-slate-800 dark:text-slate-200 ml-1.5">{clean_acct}</span>
                 </td>
-                <td class="p-3 font-semibold text-white">{clean_name}</td>
+                <td class="p-3 font-semibold text-slate-900 dark:text-white">{clean_name}</td>
                 <td class="p-3 text-center">
-                    <span class="font-mono text-xs text-slate-200 font-bold">{row['tx_count']} ครั้ง</span>
-                    <div class="text-[10px] text-slate-400">เฉลี่ย ฿{avg_amt:,.2f}</div>
+                    <span class="font-mono text-xs text-slate-800 dark:text-slate-200 font-bold">{row['tx_count']} ครั้ง</span>
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400">เฉลี่ย ฿{avg_amt:,.2f}</div>
                 </td>
                 <td class="p-3 text-right">
-                    <div class="font-mono text-xs font-bold text-emerald-400">฿{row['total_amount']:,.2f}</div>
-                    <div class="text-[10px] text-sky-400 font-semibold">{pct:.1f}% ของยอดเข้า</div>
+                    <div class="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">฿{row['total_amount']:,.2f}</div>
+                    <div class="text-[10px] text-sky-700 dark:text-sky-400 font-semibold">{pct:.1f}% ของยอดเข้า</div>
                 </td>
                 <td class="p-3 text-center">
-                    <button onclick='navigator.clipboard.writeText("{clean_acct}"); showToast("คัดลอกเลขบัญชี {clean_acct} แล้ว");' class="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-200 transition">
+                    <button onclick='navigator.clipboard.writeText("{clean_acct}"); showToast("คัดลอกเลขบัญชี {clean_acct} แล้ว");' class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded text-xs text-slate-700 dark:text-slate-200 transition">
                         คัดลอก
                     </button>
                 </td>
@@ -354,7 +354,7 @@ class ForensicDashboardGenerator:
         for idx, row in enumerate(sorted_outflows, 1):
             pct = (row["total_amount"] / total_out * 100.0) if total_out > 0 else 0.0
             avg_amt = row["total_amount"] / row["tx_count"] if row["tx_count"] > 0 else 0.0
-            rank_badge = f'<span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold {"bg-rose-500/20 text-rose-300 border border-rose-500/40" if idx == 1 else ("bg-slate-700 text-slate-200" if idx <= 3 else "text-slate-400")}">{idx}</span>'
+            rank_badge = f'<span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-bold {"bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40" if idx == 1 else ("bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200" if idx <= 3 else "text-slate-500 dark:text-slate-400")}">{idx}</span>'
             clean_name = row["name"].replace('"', '')
             clean_acct = row["acct"].replace('"', '')
 
@@ -369,20 +369,20 @@ class ForensicDashboardGenerator:
                 btn_action = f"""<button onclick='navigator.clipboard.writeText("ขออายัดกระเป๋า VASP: {clean_name} ({clean_acct})"); showToast("คัดลอกคำขอ VASP แล้ว");' class="px-2.5 py-1 bg-purple-700/80 hover:bg-purple-600 rounded text-xs text-white transition">Copy VASP</button>"""
 
             outflow_table_rows.append(f"""
-            <tr class="hover:bg-slate-800/60 transition border-b border-slate-700/50 cp-outflow-row" data-bank="{row['bank']}" data-acct="{clean_acct}" data-name="{clean_name}">
+            <tr class="hover:bg-slate-100 dark:hover:bg-slate-800/60 transition border-b border-slate-200 dark:border-slate-700/50 cp-outflow-row" data-bank="{row['bank']}" data-acct="{clean_acct}" data-name="{clean_name}">
                 <td class="p-3 text-center">{rank_badge}</td>
                 <td class="p-3">
-                    <span class="px-2 py-0.5 bg-slate-900 border border-slate-700 rounded text-xs font-mono text-rose-400 font-semibold">{row['bank']}</span>
-                    <span class="font-mono text-xs text-slate-200 ml-1.5">{clean_acct}</span>
+                    <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded text-xs font-mono text-rose-700 dark:text-rose-400 font-semibold">{row['bank']}</span>
+                    <span class="font-mono text-xs text-slate-800 dark:text-slate-200 ml-1.5">{clean_acct}</span>
                 </td>
-                <td class="p-3 font-semibold text-white">{clean_name}</td>
+                <td class="p-3 font-semibold text-slate-900 dark:text-white">{clean_name}</td>
                 <td class="p-3 text-center">
-                    <span class="font-mono text-xs text-slate-200 font-bold">{row['tx_count']} ครั้ง</span>
-                    <div class="text-[10px] text-slate-400">เฉลี่ย ฿{avg_amt:,.2f}</div>
+                    <span class="font-mono text-xs text-slate-800 dark:text-slate-200 font-bold">{row['tx_count']} ครั้ง</span>
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400">เฉลี่ย ฿{avg_amt:,.2f}</div>
                 </td>
                 <td class="p-3 text-right">
-                    <div class="font-mono text-xs font-bold text-rose-400">฿{row['total_amount']:,.2f}</div>
-                    <div class="text-[10px] text-sky-400 font-semibold">{pct:.1f}% ของยอดออก</div>
+                    <div class="font-mono text-xs font-bold text-rose-600 dark:text-rose-400">฿{row['total_amount']:,.2f}</div>
+                    <div class="text-[10px] text-sky-700 dark:text-sky-400 font-semibold">{pct:.1f}% ของยอดออก</div>
                 </td>
                 <td class="p-3 text-center">
                     <div class="mb-1">{row['badge']}</div>
@@ -415,15 +415,18 @@ class ForensicDashboardGenerator:
     <!-- Apache ECharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+        
+        /* Base Defaults (Light Mode First) */
         body {{
             font-family: 'Sarabun', sans-serif;
             background-color: #f8fafc;
             color: #0f172a;
             transition: background-color 0.2s ease, color 0.2s ease;
         }}
-        .tab-btn.active {{ border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: 700; }}
-        html.dark .tab-btn.active {{ border-bottom: 3px solid #38bdf8 !important; color: #38bdf8 !important; }}
+        code, .font-mono {{
+            font-family: 'JetBrains Mono', monospace;
+        }}
 
         /* Light Mode Styles (Default) */
         html:not(.dark) body, html.light body {{
@@ -478,21 +481,77 @@ class ForensicDashboardGenerator:
         html.light .border-slate-700\/60 {{
             border-color: #e2e8f0 !important;
         }}
+        
+        /* High-Contrast Light Mode Font Colors (Referenced from Victim Dashboard) */
         html:not(.dark) .text-white, html.light .text-white {{
             color: #0f172a !important;
         }}
-        html:not(.dark) .text-slate-200,
-        html:not(.dark) .text-slate-300,
-        html.light .text-slate-200,
-        html.light .text-slate-300 {{
+        /* Keep pure white text on solid colored buttons & badges */
+        html:not(.dark) .bg-sky-600 .text-white,
+        html:not(.dark) .bg-rose-600 .text-white,
+        html:not(.dark) .bg-amber-600 .text-white,
+        html:not(.dark) .bg-purple-700 .text-white,
+        html:not(.dark) button.bg-sky-600,
+        html:not(.dark) button.bg-rose-600,
+        html:not(.dark) button.bg-amber-600,
+        html:not(.dark) button.bg-purple-700,
+        html:not(.dark) a.bg-sky-600,
+        html.light .bg-sky-600 .text-white,
+        html.light .bg-rose-600 .text-white,
+        html.light .bg-amber-600 .text-white,
+        html.light .bg-purple-700 .text-white,
+        html.light button.bg-sky-600,
+        html.light button.bg-rose-600,
+        html.light button.bg-amber-600,
+        html.light button.bg-purple-700,
+        html.light a.bg-sky-600 {{
+            color: #ffffff !important;
+        }}
+        html:not(.dark) .text-slate-100, html.light .text-slate-100 {{
+            color: #0f172a !important;
+        }}
+        html:not(.dark) .text-slate-200, html.light .text-slate-200 {{
+            color: #1e293b !important;
+        }}
+        html:not(.dark) .text-slate-300, html.light .text-slate-300 {{
             color: #334155 !important;
         }}
         html:not(.dark) .text-slate-400, html.light .text-slate-400 {{
-            color: #64748b !important;
+            color: #475569 !important;
         }}
         html:not(.dark) .text-slate-500, html.light .text-slate-500 {{
-            color: #94a3b8 !important;
+            color: #64748b !important;
         }}
+        
+        /* Semantic Accents in Light Mode */
+        html:not(.dark) .text-sky-400, html.light .text-sky-400,
+        html:not(.dark) .text-sky-300, html.light .text-sky-300,
+        html:not(.dark) .text-sky-200, html.light .text-sky-200 {{
+            color: #0284c7 !important;
+        }}
+        html:not(.dark) .text-emerald-400, html.light .text-emerald-400,
+        html:not(.dark) .text-emerald-300, html.light .text-emerald-300 {{
+            color: #059669 !important;
+        }}
+        html:not(.dark) .text-rose-400, html.light .text-rose-400,
+        html:not(.dark) .text-rose-300, html.light .text-rose-300,
+        html:not(.dark) .text-red-400, html.light .text-red-400 {{
+            color: #e11d48 !important;
+        }}
+        html:not(.dark) .text-amber-400, html.light .text-amber-400,
+        html:not(.dark) .text-amber-300, html.light .text-amber-300,
+        html:not(.dark) .text-yellow-300, html.light .text-yellow-300 {{
+            color: #d97706 !important;
+        }}
+        html:not(.dark) .text-purple-400, html.light .text-purple-400,
+        html:not(.dark) .text-purple-300, html.light .text-purple-300 {{
+            color: #7e22ce !important;
+        }}
+        html:not(.dark) .text-teal-400, html.light .text-teal-400,
+        html:not(.dark) .text-teal-300, html.light .text-teal-300 {{
+            color: #0d9488 !important;
+        }}
+
         html:not(.dark) input, html.light input {{
             background-color: #ffffff !important;
             border-color: #cbd5e1 !important;
@@ -506,11 +565,30 @@ class ForensicDashboardGenerator:
             border-color: #cbd5e1 !important;
             color: #0f172a !important;
         }}
-        html:not(.dark) .tab-btn, html.light .tab-btn {{
-            color: #64748b;
+        
+        /* Table Headers in Light Mode (Crisp and Visible) */
+        html:not(.dark) thead tr, html.light thead tr {{
+            background-color: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
         }}
-        html:not(.dark) .tab-btn:hover, html.light .tab-btn:hover {{
+        html:not(.dark) thead th, html.light thead th {{
+            color: #334155 !important;
+            font-weight: 700 !important;
+        }}
+
+        /* Tab Buttons */
+        .tab-btn {{
+            color: #475569;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }}
+        .tab-btn:hover {{
             color: #0f172a;
+        }}
+        .tab-btn.active {{
+            border-bottom: 3px solid #0284c7 !important;
+            color: #0284c7 !important;
+            font-weight: 700 !important;
         }}
         html:not(.dark) .hover\:bg-slate-700\/30:hover,
         html:not(.dark) .hover\:bg-slate-800\/60:hover,
@@ -525,17 +603,35 @@ class ForensicDashboardGenerator:
 
         /* Dark Mode Overrides */
         html.dark body {{
-            background-color: #0f172a !important;
+            background-color: #0b1120 !important;
             color: #f8fafc !important;
         }}
         html.dark header {{
             background-color: #1e293b !important;
             border-color: #334155 !important;
         }}
-        html.dark .bg-slate-800 {{
-            background-color: #1e293b !important;
+        html.dark .bg-slate-900,
+        html.dark .bg-slate-900\/90,
+        html.dark .bg-slate-900\/80,
+        html.dark .bg-slate-950 {{
+            background-color: rgba(15, 23, 42, 0.9) !important;
         }}
-        html.dark .border-slate-700 {{
+        html.dark .bg-slate-800,
+        html.dark .bg-slate-800\/90,
+        html.dark .bg-slate-800\/80,
+        html.dark .bg-slate-800\/70,
+        html.dark .bg-slate-800\/60,
+        html.dark .bg-slate-800\/50,
+        html.dark .bg-slate-800\/40,
+        html.dark .bg-slate-850 {{
+            background-color: rgba(30, 41, 59, 0.7) !important;
+        }}
+        html.dark .border-slate-800,
+        html.dark .border-slate-800\/80,
+        html.dark .border-slate-800\/60,
+        html.dark .border-slate-700,
+        html.dark .border-slate-700\/80,
+        html.dark .border-slate-700\/60 {{
             border-color: #334155 !important;
         }}
         html.dark .text-white {{
@@ -545,19 +641,33 @@ class ForensicDashboardGenerator:
         html.dark .text-slate-300 {{ color: #cbd5e1 !important; }}
         html.dark .text-slate-400 {{ color: #94a3b8 !important; }}
         html.dark .text-slate-500 {{ color: #64748b !important; }}
+        html.dark .text-sky-400 {{ color: #38bdf8 !important; }}
+        html.dark .text-sky-300 {{ color: #7dd3fc !important; }}
+        html.dark .text-emerald-400 {{ color: #34d399 !important; }}
+        html.dark .text-emerald-300 {{ color: #6ee7b7 !important; }}
+        html.dark .text-rose-400 {{ color: #fb7185 !important; }}
+        html.dark .text-rose-300 {{ color: #fda4af !important; }}
+        html.dark .text-amber-400 {{ color: #fbbf24 !important; }}
+        html.dark .text-amber-300 {{ color: #fcd34d !important; }}
+        html.dark .text-purple-300 {{ color: #d8b4fe !important; }}
+        html.dark .tab-btn {{
+            color: #94a3b8 !important;
+        }}
+        html.dark .tab-btn:hover {{
+            color: #f1f5f9 !important;
+        }}
+        html.dark .tab-btn.active {{
+            border-bottom: 3px solid #38bdf8 !important;
+            color: #38bdf8 !important;
+            font-weight: 700 !important;
+        }}
+        .faq-pill:hover {{ transform: translateY(-1px); }}
 
         /* Fullscreen Presentation Styles */
         :fullscreen, ::backdrop {{
             background-color: #f8fafc !important;
         }}
         html.dark :fullscreen, html.dark ::backdrop {{
-            background-color: #0b1120 !important;
-        }}
-        .tab-btn.active {{ border-bottom: 3px solid #38bdf8; color: #38bdf8; font-weight: 700; }}
-        .faq-pill:hover {{ transform: translateY(-1px); }}
-
-        /* Fullscreen Presentation Styles */
-        :fullscreen, ::backdrop {{
             background-color: #0b1120 !important;
         }}
         :fullscreen {{
@@ -589,11 +699,14 @@ class ForensicDashboardGenerator:
             margin: 0 !important;
             border-radius: 0 !important;
             padding: 1.5rem !important;
-            background-color: #0b1120 !important;
+            background-color: #f8fafc !important;
             overflow: auto !important;
             display: flex !important;
             flex-direction: column !important;
             box-sizing: border-box !important;
+        }}
+        html.dark .fullscreen-active {{
+            background-color: #0b1120 !important;
         }}
         .fullscreen-active .chart-container {{
             flex: 1 1 0% !important;
@@ -606,16 +719,16 @@ class ForensicDashboardGenerator:
 <body class="p-6">
     <div class="max-w-7xl mx-auto space-y-6">
         <!-- Top Navigation & Header -->
-        <header class="flex flex-col md:flex-row md:items-center md:justify-between bg-slate-800 p-5 rounded-2xl shadow-xl border border-slate-700">
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm dark:shadow-xl border border-slate-200 dark:border-slate-700">
             <div>
                 <div class="flex items-center gap-3">
-                    <span class="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs font-semibold uppercase tracking-wider">
+                    <span class="px-3 py-1 bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
                         {report.suspicion_level}
                     </span>
-                    <span class="text-xs text-slate-400 font-mono">{'STATEMENT: ' + statement_name + ' • ' if statement_name else ''}CASE: {report.case_id}</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400 font-mono">{'STATEMENT: ' + statement_name + ' • ' if statement_name else ''}CASE: {report.case_id}</span>
                 </div>
-                <h1 class="text-2xl font-bold mt-1 text-white">ศูนย์บัญชาการตรวจพิสูจน์เส้นทางการเงินเชิงนิติวิทยาศาสตร์</h1>
-                <p class="text-sm text-slate-400">เป้าหมาย: <span class="text-amber-300 font-semibold">{report.account_name}</span> ({report.account_no_masked}) | SHA-256: <code class="text-xs text-slate-500">{report.statement_hash_sha256[:16]}...</code></p>
+                <h1 class="text-2xl font-bold mt-1 text-slate-900 dark:text-white">ศูนย์บัญชาการตรวจพิสูจน์เส้นทางการเงินเชิงนิติวิทยาศาสตร์</h1>
+                <p class="text-sm text-slate-600 dark:text-slate-400">เป้าหมาย: <span class="text-amber-700 dark:text-amber-400 font-semibold">{report.account_name}</span> ({report.account_no_masked}) | SHA-256: <code class="text-xs text-slate-600 dark:text-slate-400 font-mono">{report.statement_hash_sha256[:16]}...</code></p>
             </div>
             <div class="mt-4 md:mt-0 flex gap-3">
                 <!-- Light / Dark Theme Toggle Button -->
@@ -629,86 +742,86 @@ class ForensicDashboardGenerator:
 
         <!-- KPI Cards Row -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
-                <div class="text-xs text-slate-400 uppercase tracking-wide">คะแนนความน่าสงสัยรวม</div>
-                <div class="text-3xl font-bold mt-2 text-rose-400">{report.overall_suspicion_score}<span class="text-lg text-slate-500">/100</span></div>
-                <div class="text-xs text-rose-300 mt-1">ความเสี่ยงสูงมาก (Mule Pattern)</div>
+            <div class="bg-white dark:bg-slate-900/80 p-5 rounded-2xl border border-rose-300 dark:border-rose-500/30 shadow-sm relative overflow-hidden">
+                <div class="text-xs text-rose-700 dark:text-rose-300 font-semibold uppercase tracking-wider">คะแนนความน่าสงสัยรวม</div>
+                <div class="text-3xl font-bold mt-2 text-rose-600 dark:text-rose-400 font-mono">{report.overall_suspicion_score}<span class="text-lg text-slate-500 dark:text-slate-400 font-sans">/100</span></div>
+                <div class="text-xs text-rose-600 dark:text-rose-300/80 mt-1 font-medium">ความเสี่ยงสูงมาก (Mule Pattern)</div>
             </div>
-            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
-                <div class="text-xs text-slate-400 uppercase tracking-wide">อัตราการกวาดเงินออก (Drain Rate)</div>
-                <div class="text-3xl font-bold mt-2 text-amber-400">{drain_rate:.2f}%</div>
-                <div class="text-xs text-slate-400 mt-1">คงเหลือติดบัญชีเพียง ฿{total_in - (total_out + total_fee):,.2f}</div>
+            <div class="bg-white dark:bg-slate-900/80 p-5 rounded-2xl border border-amber-300 dark:border-amber-500/30 shadow-sm relative overflow-hidden">
+                <div class="text-xs text-amber-700 dark:text-amber-300 font-semibold uppercase tracking-wider">อัตราการกวาดเงินออก (Drain Rate)</div>
+                <div class="text-3xl font-bold mt-2 text-amber-600 dark:text-amber-400 font-mono">{drain_rate:.2f}%</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">คงเหลือติดบัญชีเพียง ฿{total_in - (total_out + total_fee):,.2f}</div>
             </div>
-            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
-                <div class="text-xs text-slate-400 uppercase tracking-wide">ยอดเงินเข้าทั้งหมด (Inflow)</div>
-                <div class="text-3xl font-bold mt-2 text-emerald-400">฿{total_in:,.2f}</div>
-                <div class="text-xs text-slate-400 mt-1">{len(inflows)} ธุรกรรม</div>
+            <div class="bg-white dark:bg-slate-900/80 p-5 rounded-2xl border border-emerald-300 dark:border-emerald-500/30 shadow-sm relative overflow-hidden">
+                <div class="text-xs text-emerald-700 dark:text-emerald-300 font-semibold uppercase tracking-wider">ยอดเงินเข้าทั้งหมด (Inflow)</div>
+                <div class="text-3xl font-bold mt-2 text-emerald-600 dark:text-emerald-400 font-mono">฿{total_in:,.2f}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{len(inflows)} ธุรกรรม</div>
             </div>
-            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-md">
-                <div class="text-xs text-slate-400 uppercase tracking-wide">ยอดระบายออกสุทธิ (Outflow)</div>
-                <div class="text-3xl font-bold mt-2 text-sky-400">฿{total_out:,.2f}</div>
-                <div class="text-xs text-slate-400 mt-1">{len(outflows)} ธุรกรรม + ค่าธรรมเนียม ฿{total_fee:,.2f}</div>
+            <div class="bg-white dark:bg-slate-900/80 p-5 rounded-2xl border border-sky-300 dark:border-sky-500/30 shadow-sm relative overflow-hidden">
+                <div class="text-xs text-sky-700 dark:text-sky-300 font-semibold uppercase tracking-wider">ยอดระบายออกสุทธิ (Outflow)</div>
+                <div class="text-3xl font-bold mt-2 text-sky-600 dark:text-sky-400 font-mono">฿{total_out:,.2f}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">{len(outflows)} ธุรกรรม + ค่าธรรมเนียม ฿{total_fee:,.2f}</div>
             </div>
         </div>
 
         <!-- Section 12 Upgrade: FAQ Quick-Filter Toolbar (7 Core Judicial Questions) -->
-        <div class="bg-slate-850 p-4 rounded-xl border border-slate-700/80 bg-slate-800/80 shadow-md">
+        <div class="bg-white dark:bg-slate-850 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-sm">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                <span class="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
                     <span>⚡</span> ทางลัดตอบคำถามยอดฮิตของพนักงานสอบสวนและศาล (7 Judicial FAQ Quick-Filters)
                 </span>
-                <span class="text-[11px] text-slate-400">คลิกเพื่อสลับไปยังพยานหลักฐานเชิงประจักษ์ทันที</span>
+                <span class="text-[11px] text-slate-500 dark:text-slate-400">คลิกเพื่อสลับไปยังพยานหลักฐานเชิงประจักษ์ทันที</span>
             </div>
             <div class="flex flex-wrap gap-2 text-xs">
-                <button onclick="handleFaq(1)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-sky-950 border border-slate-700 hover:border-sky-500 rounded-lg text-slate-300 transition">
+                <button onclick="handleFaq(1)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-sky-950 border border-slate-300 dark:border-slate-700 hover:border-sky-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
                     💸 FAQ 1: เงินไหลไปหาใครบ้าง?
                 </button>
-                <button onclick="handleFaq(2)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-rose-950 border border-slate-700 hover:border-rose-500 rounded-lg text-slate-300 transition">
+                <button onclick="handleFaq(2)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-rose-950 border border-slate-300 dark:border-slate-700 hover:border-rose-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
                     🚨 FAQ 2: บัญชีม้าแน่นอนไหม?
                 </button>
-                <button onclick="handleFaq(3)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-amber-950 border border-slate-700 hover:border-amber-500 rounded-lg text-slate-300 transition">
+                <button onclick="handleFaq(3)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-amber-950 border border-slate-300 dark:border-slate-700 hover:border-amber-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
                     🔒 FAQ 3: ควรอายัดบัญชีไหนก่อน?
                 </button>
-                <button onclick="handleFaq(4)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-emerald-950 border border-slate-700 hover:border-emerald-500 rounded-lg text-slate-300 transition">
+                <button onclick="handleFaq(4)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-emerald-950 border border-slate-300 dark:border-slate-700 hover:border-emerald-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
                     ⏱️ FAQ 4: เริ่มก่อเหตุเมื่อไหร่?
                 </button>
-                <button onclick="handleFaq(5)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-purple-950 border border-slate-700 hover:border-purple-500 rounded-lg text-slate-300 transition">
+                <button onclick="handleFaq(5)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-purple-950 border border-slate-300 dark:border-slate-700 hover:border-purple-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
                     🏧 FAQ 5: เงินสด/คริปโตเท่าไหร่?
                 </button>
-                <button onclick="handleFaq(6)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-cyan-950 border border-slate-700 hover:border-cyan-500 rounded-lg text-slate-300 transition">
+                <button onclick="handleFaq(6)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-cyan-950 border border-slate-300 dark:border-slate-700 hover:border-cyan-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
                     🤖 FAQ 6: ใช้บอทโอนเงินหรือไม่?
                 </button>
-                <button onclick="handleFaq(7)" class="faq-pill px-3 py-1.5 bg-slate-900/80 hover:bg-indigo-950 border border-slate-700 hover:border-indigo-500 rounded-lg text-slate-300 transition">
+                <button onclick="handleFaq(7)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-indigo-950 border border-slate-300 dark:border-slate-700 hover:border-indigo-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
                     🕸️ FAQ 7: ขบวนการเดียวกันไหม?
                 </button>
             </div>
         </div>
 
         <!-- Tab Controls -->
-        <div class="flex border-b border-slate-700 space-x-6 text-sm">
-            <button onclick="switchTab('tab-sankey')" id="btn-tab-sankey" class="tab-btn active pb-3 text-slate-300">
+        <div class="flex border-b border-slate-300 dark:border-slate-700 space-x-6 text-sm">
+            <button onclick="switchTab('tab-sankey')" id="btn-tab-sankey" class="tab-btn active pb-3 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
                 1. ผังการกระจายเงิน (Sankey Flow)
             </button>
-            <button onclick="switchTab('tab-network')" id="btn-tab-network" class="tab-btn pb-3 text-slate-300">
+            <button onclick="switchTab('tab-network')" id="btn-tab-network" class="tab-btn pb-3 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
                 2. กราฟโครงข่ายเชื่อมโยง (Network Topology)
             </button>
-            <button onclick="switchTab('tab-timeline')" id="btn-tab-timeline" class="tab-btn pb-3 text-slate-300">
+            <button onclick="switchTab('tab-timeline')" id="btn-tab-timeline" class="tab-btn pb-3 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
                 3. เส้นเวลาและความเร็ว (Timeline & Velocity)
             </button>
-            <button onclick="switchTab('tab-table')" id="btn-tab-table" class="tab-btn pb-3 text-slate-300">
+            <button onclick="switchTab('tab-table')" id="btn-tab-table" class="tab-btn pb-3 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
                 4. จัดอันดับยอดรวมบัญชี โอนเข้า-ออก (Counterparty Ranking)
             </button>
-            <button onclick="switchTab('tab-analytics')" id="btn-tab-analytics" class="tab-btn pb-3 text-slate-300 font-semibold text-sky-400">
+            <button onclick="switchTab('tab-analytics')" id="btn-tab-analytics" class="tab-btn pb-3 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-semibold">
                 5. สถิติเชิงลึก (Forensic Data Analytics)
             </button>
         </div>
 
         <!-- Tab 1: Sankey Flow -->
-        <div id="tab-sankey" class="tab-content bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+        <div id="tab-sankey" class="tab-content bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <div>
-                    <h2 class="text-lg font-bold text-white">ผังแสดงการไหลเวียนของเงินจากเหยื่อผ่านบัญชีม้าสู่ปลายทาง (Sankey Flow Diagram)</h2>
-                    <p class="text-xs text-slate-400">แสดงเส้นทางตั้งแต่ผู้เสียหาย/แหล่งเงินเข้า เข้าสู่บัญชีเป้าหมาย และการกระจายตัวไปยังบัญชีแถวที่ 2</p>
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white">ผังแสดงการไหลเวียนของเงินจากเหยื่อผ่านบัญชีม้าสู่ปลายทาง (Sankey Flow Diagram)</h2>
+                    <p class="text-xs text-slate-600 dark:text-slate-400">แสดงเส้นทางตั้งแต่ผู้เสียหาย/แหล่งเงินเข้า เข้าสู่บัญชีเป้าหมาย และการกระจายตัวไปยังบัญชีแถวที่ 2</p>
                 </div>
                 <button onclick="toggleCardFullscreen('tab-sankey', 'sankeyChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
                     <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
@@ -718,11 +831,11 @@ class ForensicDashboardGenerator:
         </div>
 
         <!-- Tab 2: Network Topology -->
-        <div id="tab-network" class="tab-content hidden bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+        <div id="tab-network" class="tab-content hidden bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <div>
-                    <h2 class="text-lg font-bold text-white">โครงข่ายความสัมพันธ์หลายมิติ (Multi-Hop Force-Directed Graph)</h2>
-                    <p class="text-xs text-slate-400">สามารถคลิกลากจุดเพื่อตรวจสอบศูนย์กลางการรับเงินและการกระจายเงิน</p>
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white">โครงข่ายความสัมพันธ์หลายมิติ (Multi-Hop Force-Directed Graph)</h2>
+                    <p class="text-xs text-slate-600 dark:text-slate-400">สามารถคลิกลากจุดเพื่อตรวจสอบศูนย์กลางการรับเงินและการกระจายเงิน</p>
                 </div>
                 <button onclick="toggleCardFullscreen('tab-network', 'networkChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
                     <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
@@ -734,17 +847,17 @@ class ForensicDashboardGenerator:
         <!-- Tab 3: Timeline & Velocity (2 Stacked Cards) -->
         <div id="tab-timeline" class="tab-content hidden space-y-6">
             <!-- Card 1: Batch Velocity -->
-            <div id="card-timeline-velocity" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+            <div id="card-timeline-velocity" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                     <div>
-                        <h2 class="text-lg font-bold text-white mb-1">การกระจายตัวตามช่วงเวลาและจังหวะการโอนเงิน (Temporal Velocity Analysis)</h2>
-                        <p class="text-xs text-slate-400">เปรียบเทียบขนาดรายการเงินเข้า (Inflow) และเงินออก (Outflow) ในแต่ละช่วงเวลา เพื่อตรวจจับพฤติกรรมการซอยยอด (Structuring)</p>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-1">การกระจายตัวตามช่วงเวลาและจังหวะการโอนเงิน (Temporal Velocity Analysis)</h2>
+                        <p class="text-xs text-slate-600 dark:text-slate-400">เปรียบเทียบขนาดรายการเงินเข้า (Inflow) และเงินออก (Outflow) ในแต่ละช่วงเวลา เพื่อตรวจจับพฤติกรรมการซอยยอด (Structuring)</p>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="px-3 py-1 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-full text-xs font-semibold">
+                        <span class="px-3 py-1 bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 rounded-full text-xs font-semibold">
                             เข้า: ฿{sum(t.amount for t in transactions if t.activity == ActivityType.INFLOW):,.2f}
                         </span>
-                        <span class="px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full text-xs font-semibold">
+                        <span class="px-3 py-1 bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 rounded-full text-xs font-semibold">
                             ออก: ฿{sum(t.amount for t in transactions if t.activity in (ActivityType.OUTFLOW, ActivityType.FEE)):,.2f}
                         </span>
                         <button onclick="toggleCardFullscreen('card-timeline-velocity', 'timelineChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
@@ -756,14 +869,14 @@ class ForensicDashboardGenerator:
             </div>
 
             <!-- Card 2: Cumulative Flow & Running Balance -->
-            <div id="card-timeline-cumulative" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+            <div id="card-timeline-cumulative" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                     <div>
-                        <h2 class="text-lg font-bold text-white mb-1">ยอดเงินสะสมและยอดเงินคงเหลือในบัญชีตามเวลา (Cumulative Cashflow & Balance Trajectory)</h2>
-                        <p class="text-xs text-slate-400">วิเคราะห์เส้นทางยอดเงินเข้าสะสมเทียบกับยอดเงินออกสะสม และทิศทางยอดคงเหลือ (Running Balance) ตลอดช่วงเวลาของบัญชี</p>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-1">ยอดเงินสะสมและยอดเงินคงเหลือในบัญชีตามเวลา (Cumulative Cashflow & Balance Trajectory)</h2>
+                        <p class="text-xs text-slate-600 dark:text-slate-400">วิเคราะห์เส้นทางยอดเงินเข้าสะสมเทียบกับยอดเงินออกสะสม และทิศทางยอดคงเหลือ (Running Balance) ตลอดช่วงเวลาของบัญชี</p>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-semibold">
+                        <span class="px-3 py-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 rounded-full text-xs font-semibold">
                             ยอดคงเหลือล่าสุด: ฿{transactions[-1].balance if transactions else 0:,.2f}
                         </span>
                         <button onclick="toggleCardFullscreen('card-timeline-cumulative', 'timelineCumChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
@@ -778,18 +891,18 @@ class ForensicDashboardGenerator:
         <!-- Tab 4: Aggregated Counterparty Ranking -->
         <div id="tab-table" class="tab-content hidden space-y-6">
             <!-- Header bar with search and presentation mode -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <div class="flex items-center gap-2">
                             <span class="text-xl">🏆</span>
-                            <h2 class="text-lg font-bold text-white">ตารางจัดอันดับยอดรวมบัญชีคู่กรณี (Aggregated Counterparty Ledger)</h2>
+                            <h2 class="text-lg font-bold text-slate-900 dark:text-white">ตารางจัดอันดับยอดรวมบัญชีคู่กรณี (Aggregated Counterparty Ledger)</h2>
                         </div>
-                        <p class="text-xs text-slate-400 mt-1">สรุปรวมยอดเงิน ความถี่ และจำแนกประเภทบัญชีคู่กรณี แยกฝั่งเงินเข้า (Inflow) และเงินออก (Outflow) สำหรับการสืบสวนและอายัด</p>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">สรุปรวมยอดเงิน ความถี่ และจำแนกประเภทบัญชีคู่กรณี แยกฝั่งเงินเข้า (Inflow) และเงินออก (Outflow) สำหรับการสืบสวนและอายัด</p>
                     </div>
                     <div class="flex items-center gap-3">
                         <div class="relative">
-                            <input type="text" id="cpSearch" oninput="filterCounterparties()" placeholder="ค้นหา ธนาคาร, เลขบัญชี, ชื่อ..." class="w-64 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                            <input type="text" id="cpSearch" oninput="filterCounterparties()" placeholder="ค้นหา ธนาคาร, เลขบัญชี, ชื่อ..." class="w-64 bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
                             <span class="absolute right-2.5 top-1.5 text-slate-500 text-xs">🔍</span>
                         </div>
                         <button onclick="toggleCardFullscreen('tab-table', null)" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
@@ -799,25 +912,25 @@ class ForensicDashboardGenerator:
                 </div>
 
                 <!-- Summary Cards Row -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-700/60">
-                    <div class="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/60">
+                    <div class="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-3.5 flex items-center justify-between">
                         <div>
-                            <div class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">🟢 แหล่งที่มาเงินเข้า (Inflow Originators)</div>
-                            <div class="text-lg font-bold text-white font-mono mt-0.5">{len(sorted_inflows):,} <span class="text-xs font-normal text-slate-400">บัญชีคู่กรณี</span></div>
+                            <div class="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">🟢 แหล่งที่มาเงินเข้า (Inflow Originators)</div>
+                            <div class="text-lg font-bold text-slate-900 dark:text-white font-mono mt-0.5">{len(sorted_inflows):,} <span class="text-xs font-normal text-slate-600 dark:text-slate-400">บัญชีคู่กรณี</span></div>
                         </div>
                         <div class="text-right">
-                            <div class="text-xs text-slate-400">ยอดเงินรวม</div>
-                            <div class="text-base font-bold text-emerald-400 font-mono">฿{total_in:,.2f}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">ยอดเงินรวม</div>
+                            <div class="text-base font-bold text-emerald-600 dark:text-emerald-400 font-mono">฿{total_in:,.2f}</div>
                         </div>
                     </div>
-                    <div class="bg-rose-950/20 border border-rose-500/30 rounded-xl p-3.5 flex items-center justify-between">
+                    <div class="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-500/30 rounded-xl p-3.5 flex items-center justify-between">
                         <div>
-                            <div class="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">🔴 ปลายทางเงินออก (Outflow Beneficiaries)</div>
-                            <div class="text-lg font-bold text-white font-mono mt-0.5">{len(sorted_outflows):,} <span class="text-xs font-normal text-slate-400">บัญชีคู่กรณี</span></div>
+                            <div class="text-[11px] font-semibold text-rose-700 dark:text-rose-400 uppercase tracking-wider">🔴 ปลายทางเงินออก (Outflow Beneficiaries)</div>
+                            <div class="text-lg font-bold text-slate-900 dark:text-white font-mono mt-0.5">{len(sorted_outflows):,} <span class="text-xs font-normal text-slate-600 dark:text-slate-400">บัญชีคู่กรณี</span></div>
                         </div>
                         <div class="text-right">
-                            <div class="text-xs text-slate-400">ยอดเงินรวม</div>
-                            <div class="text-base font-bold text-rose-400 font-mono">฿{total_out:,.2f}</div>
+                            <div class="text-xs text-slate-500 dark:text-slate-400">ยอดเงินรวม</div>
+                            <div class="text-base font-bold text-rose-600 dark:text-rose-400 font-mono">฿{total_out:,.2f}</div>
                         </div>
                     </div>
                 </div>
@@ -826,17 +939,17 @@ class ForensicDashboardGenerator:
             <!-- Two Comparison Tables Side-by-Side (or stacked on smaller screens) -->
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 <!-- Inflow Table Card -->
-                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex flex-col">
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
                     <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
                         <div class="flex items-center gap-2">
                             <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
-                            <h3 class="text-sm font-bold text-white">อันดับบัญชีเงินเข้าสูงสุด (Top Inflow Sources)</h3>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white">อันดับบัญชีเงินเข้าสูงสุด (Top Inflow Sources)</h3>
                         </div>
-                        <span class="text-xs text-slate-400 font-mono" id="inflowCountLabel">{len(sorted_inflows)} บัญชี</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400 font-mono" id="inflowCountLabel">{len(sorted_inflows)} บัญชี</span>
                     </div>
                     <div class="overflow-x-auto overflow-y-auto max-h-[600px] border border-slate-700/60 rounded-xl">
                         <table class="w-full text-left text-xs border-collapse">
-                            <thead class="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-700 shadow-sm z-10">
+                            <thead class="sticky top-0 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-400 border-b border-slate-300 dark:border-slate-700 shadow-sm z-10">
                                 <tr>
                                     <th class="p-2.5 text-center w-12">#</th>
                                     <th class="p-2.5">ธนาคาร / เลขบัญชี</th>
@@ -854,17 +967,17 @@ class ForensicDashboardGenerator:
                 </div>
 
                 <!-- Outflow Table Card -->
-                <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-md flex flex-col">
+                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
                     <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-700">
                         <div class="flex items-center gap-2">
                             <span class="w-3 h-3 rounded-full bg-rose-400"></span>
-                            <h3 class="text-sm font-bold text-white">อันดับบัญชีเงินออกสูงสุด (Top Outflow Destinations)</h3>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white">อันดับบัญชีเงินออกสูงสุด (Top Outflow Destinations)</h3>
                         </div>
-                        <span class="text-xs text-slate-400 font-mono" id="outflowCountLabel">{len(sorted_outflows)} บัญชี</span>
+                        <span class="text-xs text-slate-500 dark:text-slate-400 font-mono" id="outflowCountLabel">{len(sorted_outflows)} บัญชี</span>
                     </div>
                     <div class="overflow-x-auto overflow-y-auto max-h-[600px] border border-slate-700/60 rounded-xl">
                         <table class="w-full text-left text-xs border-collapse">
-                            <thead class="sticky top-0 bg-slate-900 text-slate-400 border-b border-slate-700 shadow-sm z-10">
+                            <thead class="sticky top-0 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-400 border-b border-slate-300 dark:border-slate-700 shadow-sm z-10">
                                 <tr>
                                     <th class="p-2.5 text-center w-12">#</th>
                                     <th class="p-2.5">ธนาคาร / เลขบัญชี</th>
@@ -886,20 +999,20 @@ class ForensicDashboardGenerator:
         <!-- Tab 5: Extended Forensic Data Analytics (Section 12 Implementation) -->
         <div id="tab-analytics" class="tab-content hidden space-y-6">
             <!-- Row 1: Interactive Multi-Stat Leaderboard -->
-            <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md">
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                     <div>
-                        <h2 class="text-lg font-bold text-white">ตารางจัดอันดับตัวชี้วัดสำคัญ (Multi-Dimensional Leaderboards)</h2>
-                        <p class="text-xs text-slate-400">เลือกมิติข้อมูลเพื่อวิเคราะห์พฤติกรรมและกำหนดเป้าหมายการสืบสวน</p>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white">ตารางจัดอันดับตัวชี้วัดสำคัญ (Multi-Dimensional Leaderboards)</h2>
+                        <p class="text-xs text-slate-600 dark:text-slate-400">เลือกมิติข้อมูลเพื่อวิเคราะห์พฤติกรรมและกำหนดเป้าหมายการสืบสวน</p>
                     </div>
                     <div class="flex items-center gap-3">
-                        <select id="leaderboard-metric" onchange="renderLeaderboard()" class="bg-slate-900 border border-slate-700 text-sky-400 text-xs font-semibold rounded-lg px-3 py-2 outline-none">
+                        <select id="leaderboard-metric" onchange="renderLeaderboard()" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sky-700 dark:text-sky-400 text-xs font-semibold rounded-lg px-3 py-2 outline-none">
                             <option value="outflow">🔴 ยอดเงินโอนออกสูงสุด (Top Outflows)</option>
                             <option value="inflow">🟢 ยอดเงินโอนเข้าสูงสุด (Top Inflows)</option>
                             <option value="frequency">🔁 อันดับโอนซ้ำบ่อยที่สุด (Top Frequency)</option>
                             <option value="velocity">⚡ อันดับเงินผ่านเร็วที่สุด (Top Velocity Latency)</option>
                         </select>
-                        <select id="leaderboard-limit" onchange="renderLeaderboard()" class="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-lg px-3 py-2 outline-none">
+                        <select id="leaderboard-limit" onchange="renderLeaderboard()" class="bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded-lg px-3 py-2 outline-none">
                             <option value="10">แสดง 10 อันดับแรก</option>
                             <option value="20">แสดง 20 อันดับแรก</option>
                         </select>
@@ -909,7 +1022,7 @@ class ForensicDashboardGenerator:
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-xs border-collapse">
                         <thead>
-                            <tr class="bg-slate-900/60 text-slate-400 border-b border-slate-700">
+                            <tr class="bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-400 border-b border-slate-300 dark:border-slate-700">
                                 <th class="p-3 w-16">อันดับ</th>
                                 <th class="p-3 w-28" id="th-col-time">เวลา / จำนวน</th>
                                 <th class="p-3" id="th-col-party">ชื่อบุคคล / คู่ค้า</th>
@@ -928,32 +1041,32 @@ class ForensicDashboardGenerator:
             <!-- Row 2: Off-ramp Channels & 24-Hour Nocturnal Heatmap -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Channel & Cash-out Split -->
-                <div id="card-analytics-channels" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md flex flex-col">
+                <div id="card-analytics-channels" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-3">
-                            <h3 class="text-base font-bold text-white">สัดส่วนช่องทางการผันเงินออก (Off-ramp Channel Split)</h3>
-                            <span class="text-xs text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">ถอนเงินสด / คริปโต</span>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">สัดส่วนช่องทางการผันเงินออก (Off-ramp Channel Split)</h3>
+                            <span class="text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">ถอนเงินสด / คริปโต</span>
                         </div>
                         <button onclick="toggleCardFullscreen('card-analytics-channels', 'channelChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
                             <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
                         </button>
                     </div>
-                    <p class="text-xs text-slate-400 mb-4">เปรียบเทียบการถอนเงินสดตู้ ATM (Cardless ATM), สินทรัพย์ดิจิทัล (Crypto OTC/P2P) และการโอนธนาคาร</p>
+                    <p class="text-xs text-slate-600 dark:text-slate-400 mb-4">เปรียบเทียบการถอนเงินสดตู้ ATM (Cardless ATM), สินทรัพย์ดิจิทัล (Crypto OTC/P2P) และการโอนธนาคาร</p>
                     <div id="chart-channels" class="chart-container" style="width: 100%; height: 320px;"></div>
                 </div>
 
                 <!-- 24-Hour Activity Heatmap -->
-                <div id="card-analytics-hourly" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-md flex flex-col">
+                <div id="card-analytics-hourly" class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-3">
-                            <h3 class="text-base font-bold text-white">ความหนาแน่นธุรกรรมรอบ 24 ชั่วโมง (24-Hour Activity Profile)</h3>
-                            <span class="text-xs text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">ยามวิกาล 01:00-06:00</span>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">ความหนาแน่นธุรกรรมรอบ 24 ชั่วโมง (24-Hour Activity Profile)</h3>
+                            <span class="text-xs text-rose-700 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">ยามวิกาล 01:00-06:00</span>
                         </div>
                         <button onclick="toggleCardFullscreen('card-analytics-hourly', 'hourlyChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
                             <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
                         </button>
                     </div>
-                    <p class="text-xs text-slate-400 mb-4">ตรวจหาความผิดปกติของเวลาการโอนยามวิกาล ซึ่งขัดกับวิถีชีวิตผู้ประกอบการหรือคนทั่วไป</p>
+                    <p class="text-xs text-slate-600 dark:text-slate-400 mb-4">ตรวจหาความผิดปกติของเวลาการโอนยามวิกาล ซึ่งขัดกับวิถีชีวิตผู้ประกอบการหรือคนทั่วไป</p>
                     <div id="chart-hourly" class="chart-container" style="width: 100%; height: 320px;"></div>
                 </div>
             </div>
@@ -993,47 +1106,74 @@ class ForensicDashboardGenerator:
 
         let sankeyChart, networkChart, timelineChart, timelineCumChart, channelChart, hourlyChart;
 
+        function getThemeColors() {{
+            const isDark = document.documentElement.classList.contains('dark');
+            return {{
+                isDark: isDark,
+                axisColor: isDark ? '#475569' : '#cbd5e1',
+                labelColor: isDark ? '#cbd5e1' : '#334155',
+                splitColor: isDark ? '#1e293b' : '#f1f5f9',
+                tooltipBg: isDark ? '#1e293b' : '#ffffff',
+                tooltipBorder: isDark ? '#334155' : '#cbd5e1',
+                tooltipText: isDark ? '#f8fafc' : '#0f172a',
+                nodeLabelColor: isDark ? '#e2e8f0' : '#0f172a'
+            }};
+        }}
+
         function initSankey() {{
+            const tc = getThemeColors();
             sankeyChart = echarts.init(document.getElementById('chart-sankey')); window.sankeyChart = sankeyChart;
             sankeyChart.setOption({{
-                tooltip: {{ trigger: 'item', triggerOn: 'mousemove' }},
+                tooltip: {{
+                    trigger: 'item',
+                    triggerOn: 'mousemove',
+                    backgroundColor: tc.tooltipBg,
+                    borderColor: tc.tooltipBorder,
+                    textStyle: {{ color: tc.tooltipText, fontFamily: 'Sarabun' }}
+                }},
                 series: [{{
                     type: 'sankey',
                     data: sankeyNodes,
                     links: sankeyLinks,
                     emphasis: {{ focus: 'adjacency' }},
                     lineStyle: {{ color: 'gradient', curveness: 0.5 }},
-                    label: {{ color: '#f8fafc', fontSize: 11 }}
+                    label: {{ color: tc.nodeLabelColor, fontFamily: 'Sarabun', fontSize: 11 }}
                 }}]
             }});
         }}
 
         function initNetwork() {{
+            const tc = getThemeColors();
             networkChart = echarts.init(document.getElementById('chart-network')); window.networkChart = networkChart;
             networkChart.setOption({{
-                tooltip: {{}},
+                tooltip: {{
+                    backgroundColor: tc.tooltipBg,
+                    borderColor: tc.tooltipBorder,
+                    textStyle: {{ color: tc.tooltipText, fontFamily: 'Sarabun' }}
+                }},
                 series: [{{
                     type: 'graph',
                     layout: 'force',
                     data: graphNodes,
                     links: graphLinks,
                     roam: true,
-                    label: {{ show: true, position: 'right', color: '#cbd5e1', fontSize: 10 }},
+                    label: {{ show: true, position: 'right', color: tc.nodeLabelColor, fontFamily: 'Sarabun', fontSize: 11 }},
                     force: {{ repulsion: 400, edgeLength: [80, 150] }},
-                    lineStyle: {{ color: '#94a3b8', width: 2, curveness: 0.1 }}
+                    lineStyle: {{ color: tc.isDark ? '#94a3b8' : '#64748b', width: 2, curveness: 0.1 }}
                 }}]
             }});
         }}
 
         function initTimeline() {{
+            const tc = getThemeColors();
             timelineChart = echarts.init(document.getElementById('chart-timeline')); window.timelineChart = timelineChart;
             timelineChart.setOption({{
                 tooltip: {{
                     trigger: 'axis',
                     axisPointer: {{ type: 'shadow' }},
-                    backgroundColor: '#1e293b',
-                    borderColor: '#334155',
-                    textStyle: {{ color: '#f8fafc', fontFamily: 'Sarabun' }},
+                    backgroundColor: tc.tooltipBg,
+                    borderColor: tc.tooltipBorder,
+                    textStyle: {{ color: tc.tooltipText, fontFamily: 'Sarabun' }},
                     formatter: function(params) {{
                         let title = '<div class="font-bold text-slate-200 border-b border-slate-700 pb-1 mb-1">⏱️ เวลา: ' + params[0].name + '</div>';
                         params.forEach(p => {{
@@ -1049,24 +1189,24 @@ class ForensicDashboardGenerator:
                 }},
                 legend: {{
                     data: ['เงินเข้า (Inflow)', 'เงินออก / โอนระบาย (Outflow)'],
-                    textStyle: {{ color: '#cbd5e1' }},
+                    textStyle: {{ color: tc.labelColor }},
                     top: '1%'
                 }},
                 grid: {{ left: '4%', right: '4%', bottom: '15%', top: '12%', containLabel: true }},
                 xAxis: {{
                     type: 'category',
                     data: {timeline_times_json},
-                    axisLine: {{ lineStyle: {{ color: '#475569' }} }},
-                    axisLabel: {{ color: '#94a3b8', fontSize: 11 }}
+                    axisLine: {{ lineStyle: {{ color: tc.axisColor }} }},
+                    axisLabel: {{ color: tc.labelColor, fontSize: 11 }}
                 }},
                 yAxis: {{
                     type: 'value',
                     name: 'ยอดเงินธุรกรรม (฿)',
-                    nameTextStyle: {{ color: '#94a3b8' }},
-                    axisLine: {{ lineStyle: {{ color: '#475569' }} }},
-                    splitLine: {{ lineStyle: {{ color: '#1e293b' }} }},
+                    nameTextStyle: {{ color: tc.labelColor }},
+                    axisLine: {{ lineStyle: {{ color: tc.axisColor }} }},
+                    splitLine: {{ lineStyle: {{ color: tc.splitColor }} }},
                     axisLabel: {{
-                        color: '#94a3b8',
+                        color: tc.labelColor,
                         formatter: function(val) {{ return '฿' + (val / 1000) + 'k'; }}
                     }}
                 }},
@@ -1249,7 +1389,7 @@ class ForensicDashboardGenerator:
                 channelChart = echarts.init(document.getElementById('chart-channels')); window.channelChart = channelChart;
                 channelChart.setOption({{
                     tooltip: {{ trigger: 'item', formatter: '{{b}}: ฿{{c}} ({{d}}%)' }},
-                    legend: {{ bottom: 0, textStyle: {{ color: '#cbd5e1', fontSize: 11 }} }},
+                    legend: {{ bottom: 0, textStyle: {{ color: document.documentElement.classList.contains('dark') ? '#cbd5e1' : '#334155', fontSize: 11 }} }},
                     series: [{{
                         type: 'pie',
                         radius: ['45%', '70%'],
@@ -1312,16 +1452,16 @@ class ForensicDashboardGenerator:
 
             sliced.forEach((row, i) => {{
                 const tr = document.createElement('tr');
-                tr.className = 'hover:bg-slate-700/30 transition';
-                const rankColor = i === 0 ? 'text-amber-400 font-bold' : (i === 1 ? 'text-slate-300 font-bold' : (i === 2 ? 'text-amber-600 font-bold' : 'text-slate-400'));
-                const amountColor = metric === 'inflow' ? 'text-emerald-400' : 'text-rose-400';
+                tr.className = 'hover:bg-slate-100 dark:hover:bg-slate-700/30 transition border-b border-slate-200 dark:border-slate-700/50';
+                const rankColor = i === 0 ? 'text-amber-600 dark:text-amber-400 font-bold' : (i === 1 ? 'text-slate-700 dark:text-slate-300 font-bold' : (i === 2 ? 'text-amber-800 dark:text-amber-500 font-bold' : 'text-slate-500 dark:text-slate-400'));
+                const amountColor = metric === 'inflow' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
                 
                 tr.innerHTML = `
                     <td class="p-3 ${{rankColor}}">#${{i + 1}}</td>
-                    <td class="p-3 text-slate-300 font-mono text-[11px]">${{row.time}}</td>
-                    <td class="p-3 font-semibold text-white font-sans">${{row.party}}</td>
-                    <td class="p-3 text-slate-400 font-sans">${{row.channel}}</td>
-                    <td class="p-3 text-slate-300 font-sans">${{row.detail}}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300 font-mono text-[11px]">${{row.time}}</td>
+                    <td class="p-3 font-semibold text-slate-900 dark:text-white font-sans">${{row.party}}</td>
+                    <td class="p-3 text-slate-600 dark:text-slate-400 font-sans">${{row.channel}}</td>
+                    <td class="p-3 text-slate-700 dark:text-slate-300 font-sans">${{row.detail}}</td>
                     <td class="p-3 text-right font-bold ${{amountColor}}">฿${{row.amount.toLocaleString('en-US', {{ minimumFractionDigits: 2 }})}}</td>
                 `;
                 tbody.appendChild(tr);
@@ -1335,19 +1475,28 @@ class ForensicDashboardGenerator:
             const btn = document.getElementById('btn-' + tabId);
             if (btn) btn.classList.add('active');
 
-            if (tabId === 'tab-sankey' && sankeyChart) sankeyChart.resize();
+            const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+
+            if (tabId === 'tab-sankey') {{
+                if (!sankeyChart) initSankey();
+                updateChartThemes(currentTheme);
+                sankeyChart.resize();
+            }}
             if (tabId === 'tab-network') {{
                 if (!networkChart) initNetwork();
+                updateChartThemes(currentTheme);
                 networkChart.resize();
             }}
             if (tabId === 'tab-timeline') {{
                 if (!timelineChart) initTimeline();
+                updateChartThemes(currentTheme);
                 timelineChart.resize();
                 if (timelineCumChart) timelineCumChart.resize();
             }}
             if (tabId === 'tab-analytics') {{
                 renderLeaderboard();
                 initAnalyticsCharts();
+                updateChartThemes(currentTheme);
             }}
         }}
 
@@ -1560,39 +1709,62 @@ class ForensicDashboardGenerator:
         function updateChartThemes(theme) {{
             const isDark = (theme === 'dark');
             const axisColor = isDark ? '#475569' : '#cbd5e1';
-            const labelColor = isDark ? '#94a3b8' : '#64748b';
+            const labelColor = isDark ? '#cbd5e1' : '#334155';
             const splitColor = isDark ? '#1e293b' : '#f1f5f9';
             const tooltipBg = isDark ? '#1e293b' : '#ffffff';
             const tooltipBorder = isDark ? '#334155' : '#cbd5e1';
             const tooltipText = isDark ? '#f8fafc' : '#0f172a';
+            const nodeLabel = isDark ? '#e2e8f0' : '#0f172a';
 
             if (window.sankeyChart) {{
                 window.sankeyChart.setOption({{
-                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
-                    series: [{{ label: {{ color: isDark ? '#e2e8f0' : '#1e293b' }} }}]
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText, fontFamily: 'Sarabun' }} }},
+                    series: [{{ label: {{ color: nodeLabel, fontFamily: 'Sarabun' }} }}]
+                }});
+            }}
+            if (window.networkChart) {{
+                window.networkChart.setOption({{
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText, fontFamily: 'Sarabun' }} }},
+                    series: [{{
+                        label: {{ color: nodeLabel, fontFamily: 'Sarabun' }},
+                        lineStyle: {{ color: isDark ? '#94a3b8' : '#64748b' }}
+                    }}]
                 }});
             }}
             if (window.timelineChart) {{
                 window.timelineChart.setOption({{
-                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText, fontFamily: 'Sarabun' }} }},
                     legend: {{ textStyle: {{ color: labelColor }} }},
                     xAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, axisLabel: {{ color: labelColor }} }},
-                    yAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ lineStyle: {{ color: splitColor }} }}, axisLabel: {{ color: labelColor }} }}
+                    yAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ lineStyle: {{ color: splitColor }} }}, axisLabel: {{ color: labelColor }}, nameTextStyle: {{ color: labelColor }} }}
                 }});
             }}
             if (window.timelineCumChart) {{
                 window.timelineCumChart.setOption({{
-                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText, fontFamily: 'Sarabun' }} }},
                     legend: {{ textStyle: {{ color: labelColor }} }},
                     xAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, axisLabel: {{ color: labelColor }} }},
-                    yAxis: [{{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ lineStyle: {{ color: splitColor }} }}, axisLabel: {{ color: labelColor }} }}]
+                    yAxis: [
+                        {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ lineStyle: {{ color: splitColor }} }}, axisLabel: {{ color: labelColor }} }},
+                        {{ axisLine: {{ lineStyle: {{ color: '#34d399' }} }}, axisLabel: {{ color: isDark ? '#34d399' : '#059669' }}, nameTextStyle: {{ color: isDark ? '#34d399' : '#059669' }} }}
+                    ]
+                }});
+            }}
+            if (window.channelChart) {{
+                window.channelChart.setOption({{
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText, fontFamily: 'Sarabun' }} }},
+                    legend: {{ textStyle: {{ color: labelColor }} }},
+                    series: [{{ itemStyle: {{ borderColor: isDark ? '#1e293b' : '#ffffff' }} }}]
                 }});
             }}
             if (window.hourlyChart) {{
                 window.hourlyChart.setOption({{
-                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
-                    xAxis: {{ axisLabel: {{ color: labelColor }} }},
-                    yAxis: {{ axisLabel: {{ color: labelColor }} }}
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText, fontFamily: 'Sarabun' }} }},
+                    xAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, axisLabel: {{ color: labelColor }} }},
+                    yAxis: [
+                        {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ lineStyle: {{ color: splitColor }} }}, axisLabel: {{ color: labelColor }} }},
+                        {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ show: false }}, axisLabel: {{ color: labelColor }} }}
+                    ]
                 }});
             }}
         }}
@@ -1603,6 +1775,8 @@ class ForensicDashboardGenerator:
 
         window.addEventListener('load', () => {{
             initSankey();
+            const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+            updateChartThemes(currentTheme);
         }});
 
         window.addEventListener('resize', () => {{
