@@ -731,6 +731,15 @@ class VictimDashboardGenerator:
         .fullscreen-active .scroll-container {{
             max-height: calc(100vh - 160px) !important;
         }}
+        @media print {{
+            .overflow-x-auto, .scroll-container {{
+                overflow: visible !important;
+            }}
+            table {{
+                width: 100% !important;
+                table-layout: auto !important;
+            }}
+        }}
     </style>
 </head>
 <body class="p-4 md:p-6 lg:p-8">
