@@ -114,16 +114,103 @@ class MultiEntityDashboardGenerator:
         ]
 
         html = f"""<!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multi-Entity Graph & 5-Hop Money Trail Suite - {summary.case_id}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <script>
+        tailwind.config = {{
+            darkMode: 'class',
+            theme: {{
+                extend: {{
+                    fontFamily: {{
+                        sans: ['Sarabun', 'sans-serif'],
+                    }}
+                }}
+            }}
+        }}
+    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
-        body {{ font-family: 'Sarabun', sans-serif; background-color: #0b1120; color: #f8fafc; }}
+        body {{
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }}
+        .tab-btn.active {{ border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: 700; }}
+        html.dark .tab-btn.active {{ border-bottom: 3px solid #38bdf8 !important; color: #38bdf8 !important; }}
+
+        /* Light Mode Styles (Default) */
+        html:not(.dark) body, html.light body {{
+            background-color: #f8fafc;
+            color: #0f172a;
+        }}
+        html:not(.dark) header, html.light header {{
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+        }}
+        html:not(.dark) .bg-slate-900,
+        html:not(.dark) .bg-slate-900\/90,
+        html:not(.dark) .bg-slate-900\/80,
+        html:not(.dark) .bg-slate-950,
+        html.light .bg-slate-900,
+        html.light .bg-slate-900\/90,
+        html.light .bg-slate-900\/80,
+        html.light .bg-slate-950 {{
+            background-color: #ffffff !important;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+        }}
+        html:not(.dark) .bg-slate-800,
+        html:not(.dark) .bg-slate-800\/80,
+        html.light .bg-slate-800,
+        html.light .bg-slate-800\/80 {{
+            background-color: #ffffff !important;
+        }}
+        html:not(.dark) .border-slate-800,
+        html:not(.dark) .border-slate-700,
+        html.light .border-slate-800,
+        html.light .border-slate-700 {{
+            border-color: #e2e8f0 !important;
+        }}
+        html:not(.dark) .text-white, html.light .text-white {{
+            color: #0f172a !important;
+        }}
+        html:not(.dark) .text-slate-200,
+        html:not(.dark) .text-slate-300,
+        html.light .text-slate-200,
+        html.light .text-slate-300 {{
+            color: #334155 !important;
+        }}
+        html:not(.dark) .text-slate-400, html.light .text-slate-400 {{
+            color: #64748b !important;
+        }}
+        html:not(.dark) .tab-btn, html.light .tab-btn {{
+            color: #64748b;
+        }}
+        html:not(.dark) .tab-btn:hover, html.light .tab-btn:hover {{
+            color: #0f172a;
+        }}
+
+        /* Dark Mode Overrides */
+        html.dark body {{
+            background-color: #0b1120 !important;
+            color: #f8fafc !important;
+        }}
+        html.dark header {{
+            background-color: rgba(15, 23, 42, 0.9) !important;
+            border-color: #1e293b !important;
+        }}
+        html.dark .bg-slate-800\/80 {{
+            background-color: rgba(30, 41, 59, 0.8) !important;
+        }}
+        html.dark .text-white {{
+            color: #ffffff !important;
+        }}
         .tab-btn.active {{ border-bottom: 3px solid #38bdf8; color: #38bdf8; font-weight: 700; }}
     </style>
 </head>
@@ -142,7 +229,11 @@ class MultiEntityDashboardGenerator:
                 <p class="text-sm text-slate-400">แกะรอยเครือข่ายบัญชีม้า 5 ลำดับขั้น: ผู้เสียหาย &rarr; ม้ารับยอด &rarr; ม้ากระจาย &rarr; ศูนย์พักเงิน &rarr; ตู้ ATM ชายแดน & คริปโต</p>
             </div>
             <div class="mt-4 md:mt-0 flex gap-3">
-                <button onclick="window.print()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition">พิมพ์รายงาน</button>
+                <!-- Light / Dark Theme Toggle Button -->
+                <button id="themeToggleBtn" onclick="toggleTheme()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-sm text-slate-800 dark:text-amber-300" title="สลับโหมดสว่าง / โหมดมืด">
+                    <span id="themeIcon">🌙</span> <span id="themeText">โหมดมืด</span>
+                </button>
+                <button onclick="window.print()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm transition border border-slate-300 dark:border-slate-700 shadow-sm" >พิมพ์รายงาน</button>
                 <a href="multi_entity_court_dossier.pdf" target="_blank" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-semibold transition">ดาวน์โหลดสำนวน PDF</a>
             </div>
         </header>
@@ -347,6 +438,74 @@ class MultiEntityDashboardGenerator:
                 incomeChart.resize();
             }}
         }}
+
+        
+        // Theme Engine: Light Mode (Default) & Dark Mode Toggle
+        function applyTheme(theme) {{
+            const htmlEl = document.documentElement;
+            const themeIcon = document.getElementById('themeIcon');
+            const themeText = document.getElementById('themeText');
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+
+            if (theme === 'dark') {{
+                htmlEl.classList.remove('light');
+                htmlEl.classList.add('dark');
+                if (themeIcon) themeIcon.innerText = '☀️';
+                if (themeText) themeText.innerText = 'โหมดสว่าง';
+                if (themeToggleBtn) {{
+                    themeToggleBtn.classList.remove('text-slate-800');
+                    themeToggleBtn.classList.add('text-amber-300');
+                }}
+                localStorage.setItem('finforensic_theme', 'dark');
+            }} else {{
+                htmlEl.classList.remove('dark');
+                htmlEl.classList.add('light');
+                if (themeIcon) themeIcon.innerText = '🌙';
+                if (themeText) themeText.innerText = 'โหมดมืด';
+                if (themeToggleBtn) {{
+                    themeToggleBtn.classList.remove('text-amber-300');
+                    themeToggleBtn.classList.add('text-slate-800');
+                }}
+                localStorage.setItem('finforensic_theme', 'light');
+            }}
+            updateChartThemes(theme);
+        }}
+
+        function toggleTheme() {{
+            const isDark = document.documentElement.classList.contains('dark');
+            const nextTheme = isDark ? 'light' : 'dark';
+            applyTheme(nextTheme);
+        }}
+
+        function updateChartThemes(theme) {{
+            const isDark = (theme === 'dark');
+            const axisColor = isDark ? '#475569' : '#cbd5e1';
+            const labelColor = isDark ? '#94a3b8' : '#64748b';
+            const tooltipBg = isDark ? '#1e293b' : '#ffffff';
+            const tooltipBorder = isDark ? '#334155' : '#cbd5e1';
+            const tooltipText = isDark ? '#f8fafc' : '#0f172a';
+
+            if (window.sankeyChart) {{
+                window.sankeyChart.setOption({{
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
+                    series: [{{ label: {{ color: isDark ? '#e2e8f0' : '#1e293b' }} }}]
+                }});
+            }}
+            if (window.incomeChart) {{
+                window.incomeChart.setOption({{
+                    legend: {{ textStyle: {{ color: labelColor }} }},
+                    xAxis: {{ axisLabel: {{ color: labelColor }} }},
+                    yAxis: [
+                        {{ axisLabel: {{ color: labelColor }} }},
+                        {{ axisLabel: {{ color: labelColor }} }}
+                    ]
+                }});
+            }}
+        }}
+
+        // Apply theme immediately
+        const initialTheme = localStorage.getItem('finforensic_theme') || 'light';
+        applyTheme(initialTheme);
 
         window.addEventListener('DOMContentLoaded', () => {{
             initSankey();

@@ -522,6 +522,11 @@ class VictimFlowTracer:
                 f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | `{d.recommended_action}` |"
             )
 
+        tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)
+        tot_claim_sum = sum(d.proportional_claim_thb for d in result.top_destinations)
+        lines.append(
+            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** | **AOC 1441 / ปปง. ม.49/1** |"
+        )
         lines.append("")
         lines.append("---")
         lines.append("")
@@ -613,6 +618,11 @@ class VictimFlowTracer:
                 f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | `{d.recommended_action}` |"
             )
 
+        tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)
+        tot_claim_sum = sum(d.proportional_claim_thb for d in result.top_destinations)
+        lines.append(
+            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** | **AOC 1441 / ปปง. ม.49/1** |"
+        )
         lines.append("")
         tier2_mules = [d for d in result.top_destinations if d.recommended_action == "AOC_1441_FREEZE_URGENT"]
         atm_cashing = [d for d in result.top_destinations if d.recommended_action == "CCTV_INSPECTION_ATM"]
