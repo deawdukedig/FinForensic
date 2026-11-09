@@ -393,18 +393,166 @@ class ForensicDashboardGenerator:
         outflow_table_rows_html = "".join(outflow_table_rows)
 
         html_content = f"""<!DOCTYPE html>
-<html lang="th">
+<html lang="th" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financial Forensics Dashboard - {statement_name or report.case_id}</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+        tailwind.config = {{
+            darkMode: 'class',
+            theme: {{
+                extend: {{
+                    fontFamily: {{
+                        sans: ['Sarabun', 'sans-serif'],
+                    }}
+                }}
+            }}
+        }}
+    </script>
     <!-- Apache ECharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
-        body {{ font-family: 'Sarabun', sans-serif; background-color: #0f172a; color: #f8fafc; }}
+        body {{
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }}
+        .tab-btn.active {{ border-bottom: 3px solid #0284c7; color: #0284c7; font-weight: 700; }}
+        html.dark .tab-btn.active {{ border-bottom: 3px solid #38bdf8 !important; color: #38bdf8 !important; }}
+
+        /* Light Mode Styles (Default) */
+        html:not(.dark) body, html.light body {{
+            background-color: #f8fafc;
+            color: #0f172a;
+        }}
+        html:not(.dark) header, html.light header {{
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05) !important;
+        }}
+        html:not(.dark) .bg-slate-900,
+        html:not(.dark) .bg-slate-900\/90,
+        html:not(.dark) .bg-slate-900\/80,
+        html:not(.dark) .bg-slate-950,
+        html.light .bg-slate-900,
+        html.light .bg-slate-900\/90,
+        html.light .bg-slate-900\/80,
+        html.light .bg-slate-950 {{
+            background-color: #ffffff !important;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+        }}
+        html:not(.dark) .bg-slate-800,
+        html:not(.dark) .bg-slate-800\/90,
+        html:not(.dark) .bg-slate-800\/80,
+        html:not(.dark) .bg-slate-800\/70,
+        html:not(.dark) .bg-slate-800\/60,
+        html:not(.dark) .bg-slate-800\/50,
+        html:not(.dark) .bg-slate-800\/40,
+        html:not(.dark) .bg-slate-850,
+        html.light .bg-slate-800,
+        html.light .bg-slate-800\/90,
+        html.light .bg-slate-800\/80,
+        html.light .bg-slate-800\/70,
+        html.light .bg-slate-800\/60,
+        html.light .bg-slate-800\/50,
+        html.light .bg-slate-800\/40,
+        html.light .bg-slate-850 {{
+            background-color: #ffffff !important;
+        }}
+        html:not(.dark) .border-slate-800,
+        html:not(.dark) .border-slate-800\/80,
+        html:not(.dark) .border-slate-800\/60,
+        html:not(.dark) .border-slate-700,
+        html:not(.dark) .border-slate-700\/80,
+        html:not(.dark) .border-slate-700\/60,
+        html.light .border-slate-800,
+        html.light .border-slate-800\/80,
+        html.light .border-slate-800\/60,
+        html.light .border-slate-700,
+        html.light .border-slate-700\/80,
+        html.light .border-slate-700\/60 {{
+            border-color: #e2e8f0 !important;
+        }}
+        html:not(.dark) .text-white, html.light .text-white {{
+            color: #0f172a !important;
+        }}
+        html:not(.dark) .text-slate-200,
+        html:not(.dark) .text-slate-300,
+        html.light .text-slate-200,
+        html.light .text-slate-300 {{
+            color: #334155 !important;
+        }}
+        html:not(.dark) .text-slate-400, html.light .text-slate-400 {{
+            color: #64748b !important;
+        }}
+        html:not(.dark) .text-slate-500, html.light .text-slate-500 {{
+            color: #94a3b8 !important;
+        }}
+        html:not(.dark) input, html.light input {{
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #0f172a !important;
+        }}
+        html:not(.dark) input::placeholder, html.light input::placeholder {{
+            color: #94a3b8 !important;
+        }}
+        html:not(.dark) select, html.light select {{
+            background-color: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #0f172a !important;
+        }}
+        html:not(.dark) .tab-btn, html.light .tab-btn {{
+            color: #64748b;
+        }}
+        html:not(.dark) .tab-btn:hover, html.light .tab-btn:hover {{
+            color: #0f172a;
+        }}
+        html:not(.dark) .hover\:bg-slate-700\/30:hover,
+        html:not(.dark) .hover\:bg-slate-800\/60:hover,
+        html:not(.dark) .hover\:bg-slate-800:hover,
+        html:not(.dark) .hover\:bg-slate-700:hover,
+        html.light .hover\:bg-slate-700\/30:hover,
+        html.light .hover\:bg-slate-800\/60:hover,
+        html.light .hover\:bg-slate-800:hover,
+        html.light .hover\:bg-slate-700:hover {{
+            background-color: #f1f5f9 !important;
+        }}
+
+        /* Dark Mode Overrides */
+        html.dark body {{
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }}
+        html.dark header {{
+            background-color: #1e293b !important;
+            border-color: #334155 !important;
+        }}
+        html.dark .bg-slate-800 {{
+            background-color: #1e293b !important;
+        }}
+        html.dark .border-slate-700 {{
+            border-color: #334155 !important;
+        }}
+        html.dark .text-white {{
+            color: #ffffff !important;
+        }}
+        html.dark .text-slate-200 {{ color: #e2e8f0 !important; }}
+        html.dark .text-slate-300 {{ color: #cbd5e1 !important; }}
+        html.dark .text-slate-400 {{ color: #94a3b8 !important; }}
+        html.dark .text-slate-500 {{ color: #64748b !important; }}
+
+        /* Fullscreen Presentation Styles */
+        :fullscreen, ::backdrop {{
+            background-color: #f8fafc !important;
+        }}
+        html.dark :fullscreen, html.dark ::backdrop {{
+            background-color: #0b1120 !important;
+        }}
         .tab-btn.active {{ border-bottom: 3px solid #38bdf8; color: #38bdf8; font-weight: 700; }}
         .faq-pill:hover {{ transform: translateY(-1px); }}
 
@@ -470,7 +618,11 @@ class ForensicDashboardGenerator:
                 <p class="text-sm text-slate-400">เป้าหมาย: <span class="text-amber-300 font-semibold">{report.account_name}</span> ({report.account_no_masked}) | SHA-256: <code class="text-xs text-slate-500">{report.statement_hash_sha256[:16]}...</code></p>
             </div>
             <div class="mt-4 md:mt-0 flex gap-3">
-                <button onclick="window.print()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">พิมพ์รายงาน</button>
+                <!-- Light / Dark Theme Toggle Button -->
+                <button id="themeToggleBtn" onclick="toggleTheme()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-sm text-slate-800 dark:text-amber-300" title="สลับโหมดสว่าง / โหมดมืด">
+                    <span id="themeIcon">🌙</span> <span id="themeText">โหมดมืด</span>
+                </button>
+                <button onclick="window.print()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-sm transition border border-slate-300 dark:border-slate-600 shadow-sm" >พิมพ์รายงาน</button>
                 <a href="court_dossier.md" target="_blank" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-semibold transition">เปิดสำนวนคดี</a>
             </div>
         </header>
@@ -1365,6 +1517,89 @@ class ForensicDashboardGenerator:
                 exitFullscreenMode(currentFullscreenEl);
             }}
         }});
+
+        
+        // Theme Engine: Light Mode (Default) & Dark Mode Toggle
+        function applyTheme(theme) {{
+            const htmlEl = document.documentElement;
+            const themeIcon = document.getElementById('themeIcon');
+            const themeText = document.getElementById('themeText');
+            const themeToggleBtn = document.getElementById('themeToggleBtn');
+
+            if (theme === 'dark') {{
+                htmlEl.classList.remove('light');
+                htmlEl.classList.add('dark');
+                if (themeIcon) themeIcon.innerText = '☀️';
+                if (themeText) themeText.innerText = 'โหมดสว่าง';
+                if (themeToggleBtn) {{
+                    themeToggleBtn.classList.remove('text-slate-800');
+                    themeToggleBtn.classList.add('text-amber-300');
+                }}
+                localStorage.setItem('finforensic_theme', 'dark');
+            }} else {{
+                htmlEl.classList.remove('dark');
+                htmlEl.classList.add('light');
+                if (themeIcon) themeIcon.innerText = '🌙';
+                if (themeText) themeText.innerText = 'โหมดมืด';
+                if (themeToggleBtn) {{
+                    themeToggleBtn.classList.remove('text-amber-300');
+                    themeToggleBtn.classList.add('text-slate-800');
+                }}
+                localStorage.setItem('finforensic_theme', 'light');
+            }}
+            updateChartThemes(theme);
+        }}
+
+        function toggleTheme() {{
+            const isDark = document.documentElement.classList.contains('dark');
+            const nextTheme = isDark ? 'light' : 'dark';
+            applyTheme(nextTheme);
+            showToast(nextTheme === 'light' ? 'เปลี่ยนเป็นโหมดสว่างแล้ว' : 'เปลี่ยนเป็นโหมดมืดแล้ว');
+        }}
+
+        function updateChartThemes(theme) {{
+            const isDark = (theme === 'dark');
+            const axisColor = isDark ? '#475569' : '#cbd5e1';
+            const labelColor = isDark ? '#94a3b8' : '#64748b';
+            const splitColor = isDark ? '#1e293b' : '#f1f5f9';
+            const tooltipBg = isDark ? '#1e293b' : '#ffffff';
+            const tooltipBorder = isDark ? '#334155' : '#cbd5e1';
+            const tooltipText = isDark ? '#f8fafc' : '#0f172a';
+
+            if (window.sankeyChart) {{
+                window.sankeyChart.setOption({{
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
+                    series: [{{ label: {{ color: isDark ? '#e2e8f0' : '#1e293b' }} }}]
+                }});
+            }}
+            if (window.timelineChart) {{
+                window.timelineChart.setOption({{
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
+                    legend: {{ textStyle: {{ color: labelColor }} }},
+                    xAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, axisLabel: {{ color: labelColor }} }},
+                    yAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ lineStyle: {{ color: splitColor }} }}, axisLabel: {{ color: labelColor }} }}
+                }});
+            }}
+            if (window.timelineCumChart) {{
+                window.timelineCumChart.setOption({{
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
+                    legend: {{ textStyle: {{ color: labelColor }} }},
+                    xAxis: {{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, axisLabel: {{ color: labelColor }} }},
+                    yAxis: [{{ axisLine: {{ lineStyle: {{ color: axisColor }} }}, splitLine: {{ lineStyle: {{ color: splitColor }} }}, axisLabel: {{ color: labelColor }} }}]
+                }});
+            }}
+            if (window.hourlyChart) {{
+                window.hourlyChart.setOption({{
+                    tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText }} }},
+                    xAxis: {{ axisLabel: {{ color: labelColor }} }},
+                    yAxis: {{ axisLabel: {{ color: labelColor }} }}
+                }});
+            }}
+        }}
+
+        // Apply theme immediately
+        const initialTheme = localStorage.getItem('finforensic_theme') || 'light';
+        applyTheme(initialTheme);
 
         window.addEventListener('load', () => {{
             initSankey();
