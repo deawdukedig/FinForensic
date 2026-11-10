@@ -50,29 +50,32 @@ All agents operating in this repository MUST strictly abide by the following non
    - All collaborating agents operating under the harness MUST emit Structured Output adhering to the contract defined in [`harness/schemas.py`](file:///home/deaw/Projects/TeamAgents/harness/schemas.py).
    - Task stack transitions, handoffs, and circuit breaking are managed deterministically by the harness engine via `stack.json`. Agents do not guess or decide the next agent; the harness controls the execution pipeline.
 
-7. **📝 Automated Analytical Reporting & Dual Output (Markdown + HTML Dashboard) Persistence Protocol (Iron Law)**:
-   - Whenever an agent conducts a financial forensic investigation, victim fund dispersal trace, or case inquiry, the agent MUST automatically generate and persist BOTH:
-     1. Structured Markdown Analytical Report in `output/` (e.g. `output/victim_<name_slug>_analysis.md`, `output/<statement_name>_analysis.md`, or `output/<case_or_entity>_analysis.md`)
-     2. Interactive Single-Page HTML Visual Dashboard in `output/` (e.g. `output/victim_<name_slug>_dashboard.html`, `output/<statement_name>_dashboard.html`, or `output/multi_entity_dashboard.html`) utilizing `VictimDashboardGenerator` (`src/ui/victim_dashboard.py`), `ForensicDashboardGenerator` (`src/ui/dashboard_generator.py`), or `MultiEntityDashboardGenerator` (`src/ui/multi_entity_dashboard.py`).
+7. **📝 Automated Analytical Reporting & Multi-Format Output (Markdown Brief Report + DOCX + PDF + HTML Dashboard) Persistence Protocol (Iron Law)**:
+   - **Target Scope Separation (Iron Law):**
+     1. **Targeted Victim Tracing (กรณีระบุชื่อหรือบัญชีผู้เสียหาย):** เมื่อผู้ใช้ระบุชื่อผู้เสียหาย (Victim Name / Keyword / Account) ระบบ MUST สร้างเฉพาะชุดเอกสารและแดชบอร์ดเฉพาะรายผู้เสียหาย (`output/victim_<name_slug>_analysis.{md,docx,pdf}` และ `output/victim_<name_slug>_dashboard.html`) เท่านั้น **ห้ามสร้างรายงานและแดชบอร์ดภาพรวม Statement (`output/statement_*` หรือ `output/<statement_name>_*`) โดยเด็ดขาด**.
+     2. **Statement Overview Investigation (กรณีตรวจภาพรวมบัญชี/ไม่ระบุเหยื่อ):** ระบบจึงจะสร้างชุดเอกสารและแดชบอร์ดภาพรวมบัญชี (`output/<statement_name>_analysis.{md,docx,pdf}` และ `output/<statement_name>_dashboard.html`).
+   - Whenever an agent conducts a financial forensic investigation, victim fund dispersal trace, or case inquiry, the agent MUST automatically generate and persist by DEFAULT ALL FOUR output artifacts for the designated target:
+     1. Structured Markdown Brief Analytical Report in `output/` (e.g. `output/victim_<name_slug>_analysis.md` หรือ `output/<statement_name>_analysis.md`) containing Sections 1-3 (Executive Summary, Top Dispersal Destinations & Beneficiaries with Mermaid topology, Transfer Circumstances & Critical Forensic Insights) and omitting Sections 4, 5, 6, 7 (MILP proofs, restitution formula, directives, and chain of custody) unless full report is explicitly requested.
+     2. Microsoft Word Document in `output/` (e.g. `output/victim_<name_slug>_analysis.docx` หรือ `output/<statement_name>_analysis.docx`) converted via Quarto utilizing TH Sarabun New font (14pt+).
+     3. PDF Document in `output/` (e.g. `output/victim_<name_slug>_analysis.pdf` หรือ `output/<statement_name>_analysis.pdf`) converted via Quarto Typst engine utilizing TH Sarabun New font (14pt+).
+     4. Interactive Single-Page HTML Visual Dashboard in `output/` (e.g. `output/victim_<name_slug>_dashboard.html` หรือ `output/<statement_name>_dashboard.html`) utilizing `VictimDashboardGenerator` (`src/ui/victim_dashboard.py`) หรือ `ForensicDashboardGenerator` (`src/ui/dashboard_generator.py`).
+     5. *(สำหรับเคสผู้เสียหาย / Victim Tracing)* **ผังการกระจายเงินแนวนอน (Landscape Dispersal Diagram DOCX & PDF):** ระบบ MUST สร้างเอกสารแนวนอน `output/victim_<name_slug>_diagram.{md,docx,pdf}` โดยสกัดผังการกระจายเงิน (Sankey Flow Topology) และตารางผู้รับผลประโยชน์หลักเพื่อใช้เป็นเอกสารประกอบสำนวนแบบ Wide Canvas ให้เห็นเส้นทางเงินชัดเจน.
    - **Overview Dashboard Naming (Iron Law):** When generating statement overview dashboards (`ForensicDashboardGenerator`), the output file MUST be named `output/<statement_name>_dashboard.html` (derived from the statement CSV file stem, e.g. `output/template04_BAY_0021_dashboard.html` or `output/statement_mockup_2500_dashboard.html`), NEVER the generic `output/dashboard.html`.
-   - The generated Markdown file MUST contain:
+   - The default Brief Markdown file MUST contain:
      1. Executive Summary & Loss Ledger (Victim profile, loss volume, transaction counts)
      2. Top Dispersal Destinations & Beneficiaries Table with Proportional Asset Restitution Claims (under Section 226 / AMLA Sec 49/1) and Visual Mermaid Dispersal Topology Diagram
      3. Transfer Circumstances & Critical Forensic Insights (พฤติการณ์ของการโอนและประเด็นสำคัญเชิงสืบสวน: Modus Operandi, Asset Recovery Golden Window Analysis for high residual buffers, and Corporate Payment Gateways / Tech Ad Platform Subpoena Directives under CPC Section 132 prohibiting AOC retail freezes on clearing pools)
-     4. MILP Flow Matching & Mathematical Conservation Proofs (`scipy.optimize.milp`)
-     5. Proportional Restitution Allocation Methodology (AMLA 49/1 Formulation)
-     6. Actionable Directives by Target Category (AOC 1441 Rapid Freeze for retail mule accounts vs Platform Subpoena & Ad Account Suspension under CPC Sec 132 for Payment Gateways/Ad Platforms)
-     7. Cryptographic Chain of Custody & Evidence Vault Receipt (SHA-256)
+     *(Note: Sections 4-7 are omitted in the default brief report mode)*
    - The generated HTML Dashboard MUST provide:
      1. Interactive ECharts visualizations (Sankey flow diagram, timeline, category breakdown)
      2. Realtime searchable transaction table with PDPA masking
      3. Standalone self-contained single-page responsive layout
-   - The agent MUST cite the relative paths of BOTH generated files (`.md` and `.html`) in its final response.
+   - The agent MUST cite the relative paths of ALL generated files (`.md`, `.docx`, `.pdf`, and `.html`) in its final response.
 
 8. **🛑 Strict On-Demand Protocol for Court Dossiers & Emergency Freezing Orders (Opt-In Only / Zero Autonomous Legal Filing)**:
-   - **A. Default Behavior (Dual Analysis Mode: Markdown + HTML Dashboard Always Paired)**:
-     - When conducting forensic tracing, victim analysis, or money trail investigations, agents MUST generate ALWAYS BOTH the analytical markdown report in `output/` (e.g. `output/victim_<name_slug>_analysis.md`) AND the interactive single-page HTML dashboard (e.g. `output/victim_<name_slug>_dashboard.html`) and report findings directly in chat.
-     - **DO NOT GENERATE COURT DOSSIERS**: Do not create, update, or export court dossiers (`*.pdf`, `--output-pdf`, `--output-md`, `court_dossier.pdf`) autonomously.
+   - **A. Default Behavior (Brief Reports in MD + DOCX + PDF + HTML Dashboard Always Paired)**:
+     - When conducting forensic tracing, victim analysis, or money trail investigations, agents MUST generate ALWAYS by DEFAULT the analytical brief report in all formats (`.md`, `.docx`, `.pdf`) and the interactive dashboard (`.html`) in `output/` and report findings directly in chat.
+     - **DO NOT GENERATE COURT DOSSIERS**: Do not create, update, or export formal court dossiers (`output/*_dossier.pdf`, `--output-pdf` on export-pdf, `court_dossier.pdf`) autonomously.
      - **DO NOT GENERATE EMERGENCY FREEZING ORDERS**: Do not create, update, or export AOC 1441 emergency freezing payloads (`*.json`, `--output-aoc`) autonomously.
      - **DO NOT CITE UNREQUESTED LEGAL ARTIFACTS**: Never claim or report that official court dossiers or AOC freezing files were generated unless the user requested them.
    - **B. Exception Trigger for Legal Filings (Explicit Opt-In Only)**:

@@ -81,14 +81,16 @@ def get_quarto_version() -> Optional[str]:
     return None
 
 
-def ensure_docx_reference_template(template_path: Optional[Path] = None) -> Path:
+def ensure_docx_reference_template(template_path: Optional[Path] = None, landscape: bool = False) -> Path:
     """
     Creates or ensures a Word reference document (.docx) with TH Sarabun New
     as the primary font (Normal, Headings, Tables) and Cambria Math for equations.
+    Supports landscape orientation when landscape=True.
     """
     if template_path is None:
         TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-        template_path = TEMPLATES_DIR / "custom-reference.docx"
+        template_name = "custom-reference-landscape.docx" if landscape else "custom-reference.docx"
+        template_path = TEMPLATES_DIR / template_name
 
     if template_path.exists() and template_path.stat().st_size > 5000:
         return template_path
@@ -136,6 +138,22 @@ def ensure_docx_reference_template(template_path: Optional[Path] = None) -> Path
                     xml_str = re.sub(r'(<w:sz\s+w:val=)"(\d+)"([^>]*>)', _raise_sz, xml_str)
                     xml_str = re.sub(r'(<w:szCs\s+w:val=)"(\d+)"([^>]*>)', _raise_sz, xml_str)
 
+                    # Enforce solid table grid borders on Table style
+                    table_border_xml = (
+                        '<w:tblBorders>'
+                        '<w:top w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+                        '<w:left w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+                        '<w:bottom w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+                        '<w:right w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+                        '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>'
+                        '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>'
+                        '</w:tblBorders>'
+                    )
+                    if "<w:tblBorders>" in xml_str:
+                        xml_str = re.sub(r'<w:tblBorders>.*?</w:tblBorders>', table_border_xml, xml_str, flags=re.DOTALL)
+                    else:
+                        xml_str = re.sub(r'(<w:style\s+w:type="table"[^>]*w:styleId="Table"[^>]*>.*?<w:tblPr>)', r'\g<1>' + table_border_xml, xml_str, flags=re.DOTALL)
+
                     data = xml_str.encode("utf-8")
 
                 elif item.filename == "word/theme/theme1.xml":
@@ -152,7 +170,59 @@ def ensure_docx_reference_template(template_path: Optional[Path] = None) -> Path
     if raw_ref.exists():
         raw_ref.unlink(missing_ok=True)
 
+    # Step 3: If landscape requested, modify page orientation via docx
+    if landscape:
+        try:
+            import docx
+            d = docx.Document(str(template_path))
+            if d.sections:
+                s = d.sections[0]
+                s.orientation = docx.enum.section.WD_ORIENT.LANDSCAPE
+                s.page_width = docx.shared.Mm(297)
+                s.page_height = docx.shared.Mm(210)
+                d.save(str(template_path))
+        except Exception:
+            pass
+
     return template_path
+
+
+def _ensure_docx_table_borders(docx_path: Union[str, Path]) -> None:
+    """Injects explicit table borders into every table in the document XML."""
+    target_path = Path(docx_path)
+    if not target_path.exists():
+        return
+
+    with zipfile.ZipFile(target_path, "r") as zin:
+        entries = {item.filename: zin.read(item.filename) for item in zin.infolist()}
+
+    if "word/document.xml" not in entries:
+        return
+
+    doc_xml = entries["word/document.xml"].decode("utf-8")
+    border_tag = (
+        '<w:tblBorders>'
+        '<w:top w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+        '<w:left w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+        '<w:bottom w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+        '<w:right w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>'
+        '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>'
+        '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>'
+        '</w:tblBorders>'
+    )
+
+    def repl_tbl_pr(m: re.Match) -> str:
+        tbl_pr = m.group(0)
+        if "<w:tblBorders>" in tbl_pr:
+            return re.sub(r"<w:tblBorders>.*?</w:tblBorders>", border_tag, tbl_pr, flags=re.DOTALL)
+        return tbl_pr[:-10] + border_tag + "</w:tblPr>"
+
+    doc_xml_mod = re.sub(r"<w:tblPr>.*?</w:tblPr>", repl_tbl_pr, doc_xml, flags=re.DOTALL)
+    entries["word/document.xml"] = doc_xml_mod.encode("utf-8")
+
+    with zipfile.ZipFile(target_path, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+        for fname, data in entries.items():
+            zout.writestr(fname, data)
 
 
 def transform_mermaid_blocks(markdown_content: str) -> str:
@@ -188,6 +258,7 @@ def generate_frontmatter(
     reference_doc: Optional[Path] = None,
     toc: bool = True,
     toc_depth: int = 3,
+    landscape: bool = False,
 ) -> str:
     """Generates YAML frontmatter configured with TH Sarabun New and mathematical font settings."""
     if output_format.lower() == "docx":
@@ -204,6 +275,19 @@ def generate_frontmatter(
             "---\n\n"
         )
     elif output_format.lower() in ("pdf", "typst"):
+        typst_include = [
+            '        #set text(size: 14pt, font: "TH Sarabun New")',
+            "        #show table: set text(size: 14pt)",
+            "        #set table(stroke: 0.5pt + rgb(148, 163, 184))",
+            '        #show image: set image(width: 100%, height: auto, fit: "contain")',
+        ]
+        if landscape:
+            typst_include.insert(0, '        #set page(paper: "a4", flipped: true)')
+        include_str = "\n".join(typst_include)
+
+        margin_x = "1.5cm" if landscape else "2cm"
+        margin_y = "1.5cm" if landscape else "2cm"
+
         return (
             "---\n"
             f'title: "{title}"\n'
@@ -216,13 +300,11 @@ def generate_frontmatter(
             f"    toc: {'true' if toc else 'false'}\n"
             f"    toc-depth: {toc_depth}\n"
             "    margin:\n"
-            "      x: 2cm\n"
-            "      y: 2cm\n"
+            f"      x: {margin_x}\n"
+            f"      y: {margin_y}\n"
             "    include-before:\n"
             "      - |\n"
-            '        #set text(size: 14pt, font: "TH Sarabun New")\n'
-            "        #show table: set text(size: 14pt)\n"
-            '        #show image: set image(width: 100%, height: auto, fit: "contain")\n'
+            f"{include_str}\n"
             "---\n\n"
         )
     else:
@@ -236,6 +318,7 @@ def convert_document(
     title: Optional[str] = None,
     toc: bool = True,
     toc_depth: int = 3,
+    landscape: bool = False,
 ) -> Path:
     """
     Converts a Markdown (.md) document into a court-admissible Word (.docx) or PDF (.pdf)
@@ -248,6 +331,7 @@ def convert_document(
         title: Optional document title. Inferred from # Heading if not provided.
         toc: Whether to include a Table of Contents.
         toc_depth: Depth of Table of Contents headings.
+        landscape: Whether to render document in landscape orientation (A4 flipped).
 
     Returns:
         Path to the generated document (relative to workspace).
@@ -291,10 +375,14 @@ def convert_document(
     # Reference doc for docx
     ref_doc: Optional[Path] = None
     if target_fmt == "docx":
-        ref_doc = ensure_docx_reference_template()
+        ref_doc = ensure_docx_reference_template(landscape=landscape)
 
     # Transform mermaid blocks to Quarto executable blocks
     transformed_content = transform_mermaid_blocks(content)
+
+    # If landscape, adjust fig-width to wider printable canvas (e.g. 9.5 inches)
+    if landscape:
+        transformed_content = transformed_content.replace("%%| fig-width: 6.5", "%%| fig-width: 9.5")
 
     # Remove existing frontmatter if any, then prepend styled frontmatter
     if transformed_content.startswith("---"):
@@ -308,6 +396,7 @@ def convert_document(
         reference_doc=ref_doc,
         toc=toc,
         toc_depth=toc_depth,
+        landscape=landscape,
     )
     final_qmd_content = frontmatter + transformed_content
 
@@ -354,6 +443,13 @@ def convert_document(
 
         if not out_p.exists():
             raise FileNotFoundError(f"Expected output file not generated: {out_p}")
+
+        # Post-process docx to guarantee table grid borders on all generated tables
+        if target_fmt == "docx":
+            try:
+                _ensure_docx_table_borders(out_p)
+            except Exception:
+                pass
 
         return out_p
 
