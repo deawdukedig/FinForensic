@@ -100,6 +100,11 @@ def main() -> None:
     analyze_parser.add_argument("--statement", default="input/statement.csv", help="Path to statement CSV")
     analyze_parser.add_argument("--case-id", default="CASE-2026-0820", help="Investigative Case ID")
     analyze_parser.add_argument("--officer", default="พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)", help="Investigating Officer")
+    analyze_parser.add_argument("--output-analysis", help="Optional path to export Markdown forensic analysis (defaults to output/<stmt>_analysis.md)")
+    analyze_parser.add_argument("--output-dashboard", help="Optional path to export interactive HTML single-page dashboard")
+    analyze_parser.add_argument("--quarto", choices=["docx", "pdf", "both"], help="Convert analysis Markdown to Word/PDF via Quarto (Rule 9)")
+    analyze_parser.add_argument("--output-docx", help="Optional path to export Word (.docx) document via Quarto")
+    analyze_parser.add_argument("--output-pdf", help="Optional path to export PDF (.pdf) document via Quarto")
 
     # 11. export-dossier (Court Dossier Generator Exhibits A-D)
     dossier_parser = subparsers.add_parser("export-dossier", help="Export Section 226 court-admissible dossier report")
@@ -477,19 +482,51 @@ def main() -> None:
             # Mandatory Dual Output: Markdown Analysis + Interactive HTML Dashboard
             from src.ui.dashboard_generator import ForensicDashboardGenerator
             stmt_stem = Path(csv_path).stem
-            analysis_path = Path(f"output/{stmt_stem}_analysis.md")
+            analysis_path_str = getattr(args, "output_analysis", None) or f"output/{stmt_stem}_analysis.md"
+            analysis_path = Path(analysis_path_str)
             analysis_path.parent.mkdir(parents=True, exist_ok=True)
-            analysis_text = dossier_gen.generate_markdown_dossier(report, transactions, vault)
+            analysis_text = dossier_gen.generate_analysis_report(report, transactions, vault)
             analysis_path.write_text(analysis_text, encoding="utf-8")
             vault.record_action("EXPORT_ANALYSIS_MD", f"Exported statement analysis to {analysis_path}")
 
-            dash_path = Path(f"output/{stmt_stem}_dashboard.html")
+            dash_path_str = getattr(args, "output_dashboard", None) or f"output/{stmt_stem}_dashboard.html"
+            dash_path = Path(dash_path_str)
             dash_path.parent.mkdir(parents=True, exist_ok=True)
             ForensicDashboardGenerator().generate_html(report, transactions, dash_path.as_posix(), statement_name=stmt_stem)
             vault.record_action("EXPORT_DASHBOARD", f"Exported statement dashboard to {dash_path}")
 
             print(f"\n📊 Forensic Analysis Markdown: {analysis_path.as_posix()}")
             print(f"📊 Interactive HTML Dashboard:  {dash_path.as_posix()}")
+
+            # Optional Quarto Word/PDF Conversion (Rule 9 Governance)
+            quarto_mode = getattr(args, "quarto", None)
+            doc_opt = getattr(args, "output_docx", None)
+            pdf_opt = getattr(args, "output_pdf", None)
+
+            if quarto_mode or doc_opt or pdf_opt:
+                from src.dossier.quarto_converter import convert_document, is_quarto_installed
+                if not is_quarto_installed():
+                    print("⚠️ Quarto is not installed on this system. Unable to convert to Word/PDF.")
+                else:
+                    formats_to_convert = []
+                    if quarto_mode == "both":
+                        formats_to_convert = ["docx", "pdf"]
+                    elif quarto_mode in ("docx", "pdf"):
+                        formats_to_convert = [quarto_mode]
+                    else:
+                        if doc_opt:
+                            formats_to_convert.append("docx")
+                        if pdf_opt:
+                            formats_to_convert.append("pdf")
+
+                    for q_fmt in formats_to_convert:
+                        custom_out = Path(doc_opt) if q_fmt == "docx" and doc_opt else (Path(pdf_opt) if q_fmt == "pdf" and pdf_opt else None)
+                        conv_res = convert_document(analysis_path, output_format=q_fmt, output_path=custom_out)
+                        vault.record_action(f"EXPORT_{q_fmt.upper()}", f"Converted statement analysis to {conv_res}")
+                        if q_fmt == "docx":
+                            print(f"📑 Quarto Converted DOCX:      {conv_res.as_posix()}")
+                        else:
+                            print(f"📑 Quarto Converted PDF:       {conv_res.as_posix()}")
 
     elif args.command == "generate-dashboard":
         from src.models.transaction import ActivityType
