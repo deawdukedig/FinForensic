@@ -102,7 +102,9 @@ def main() -> None:
     analyze_parser.add_argument("--officer", default="พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)", help="Investigating Officer")
     analyze_parser.add_argument("--output-analysis", help="Optional path to export Markdown forensic analysis (defaults to output/<stmt>_analysis.md)")
     analyze_parser.add_argument("--output-dashboard", help="Optional path to export interactive HTML single-page dashboard")
-    analyze_parser.add_argument("--quarto", choices=["docx", "pdf", "both"], help="Convert analysis Markdown to Word/PDF via Quarto (Rule 9)")
+    analyze_parser.add_argument("--full", action="store_true", help="Generate full 7-section report (by default brief report omitting Sections 4-7 is generated)")
+    analyze_parser.add_argument("--quarto", choices=["docx", "pdf", "both", "none"], default="both", help="Convert analysis Markdown to Word/PDF via Quarto (default: both)")
+    analyze_parser.add_argument("--no-quarto", action="store_true", help="Disable default Quarto DOCX/PDF generation")
     analyze_parser.add_argument("--output-docx", help="Optional path to export Word (.docx) document via Quarto")
     analyze_parser.add_argument("--output-pdf", help="Optional path to export PDF (.pdf) document via Quarto")
 
@@ -167,8 +169,12 @@ def main() -> None:
     vic_parser.add_argument("--tolerance", type=float, default=0.05, help="Fee-buffer tolerance ratio (default 0.05)")
     vic_parser.add_argument("--window-hours", type=float, default=24.0, help="Sliding temporal search window in hours (default 24.0)")
     vic_parser.add_argument("--output-analysis", help="Optional path to export Markdown forensic analysis (defaults to output/victim_<slug>_analysis.md)")
+    vic_parser.add_argument("--full", action="store_true", help="Generate full 7-section report (by default brief report omitting Sections 4-7 is generated)")
     vic_parser.add_argument("--output-md", help="Optional path to export Markdown court dossier")
-    vic_parser.add_argument("--output-pdf", help="Optional path to export PDF court dossier")
+    vic_parser.add_argument("--output-pdf", help="Optional path to export PDF document via Quarto")
+    vic_parser.add_argument("--output-docx", help="Optional path to export Word (.docx) document via Quarto")
+    vic_parser.add_argument("--quarto", choices=["docx", "pdf", "both", "none"], default="both", help="Convert victim analysis Markdown to Word/PDF via Quarto (default: both)")
+    vic_parser.add_argument("--no-quarto", action="store_true", help="Disable default Quarto DOCX/PDF generation")
     vic_parser.add_argument("--output-aoc", help="Optional path to export AOC 1441 freeze JSON")
     vic_parser.add_argument("--output-dashboard", help="Optional path to export interactive HTML single-page dashboard")
     vic_parser.add_argument("--font", default="THSarabunNew", help="Thai font for PDF: 'THSarabunNew' or 'THSarabunIT๙'")
@@ -479,13 +485,15 @@ def main() -> None:
             print(f"   Integrity:   {vault.verify_vault_integrity()} (All records tamper-evident)")
             print("=" * 65)
 
-            # Mandatory Dual Output: Markdown Analysis + Interactive HTML Dashboard
+            # Mandatory Dual Output: Markdown Analysis (Brief by default) + Interactive HTML Dashboard
             from src.ui.dashboard_generator import ForensicDashboardGenerator
             stmt_stem = Path(csv_path).stem
+            is_full = getattr(args, "full", False)
+            is_brief = not is_full
             analysis_path_str = getattr(args, "output_analysis", None) or f"output/{stmt_stem}_analysis.md"
             analysis_path = Path(analysis_path_str)
             analysis_path.parent.mkdir(parents=True, exist_ok=True)
-            analysis_text = dossier_gen.generate_analysis_report(report, transactions, vault)
+            analysis_text = dossier_gen.generate_analysis_report(report, transactions, vault, brief=is_brief)
             analysis_path.write_text(analysis_text, encoding="utf-8")
             vault.record_action("EXPORT_ANALYSIS_MD", f"Exported statement analysis to {analysis_path}")
 
@@ -498,12 +506,13 @@ def main() -> None:
             print(f"\n📊 Forensic Analysis Markdown: {analysis_path.as_posix()}")
             print(f"📊 Interactive HTML Dashboard:  {dash_path.as_posix()}")
 
-            # Optional Quarto Word/PDF Conversion (Rule 9 Governance)
-            quarto_mode = getattr(args, "quarto", None)
+            # Default Quarto Word/PDF Conversion (Rule 9 Governance)
+            no_quarto = getattr(args, "no_quarto", False)
+            quarto_mode = "none" if no_quarto else getattr(args, "quarto", "both")
             doc_opt = getattr(args, "output_docx", None)
             pdf_opt = getattr(args, "output_pdf", None)
 
-            if quarto_mode or doc_opt or pdf_opt:
+            if quarto_mode != "none" or doc_opt or pdf_opt:
                 from src.dossier.quarto_converter import convert_document, is_quarto_installed
                 if not is_quarto_installed():
                     print("⚠️ Quarto is not installed on this system. Unable to convert to Word/PDF.")
@@ -878,12 +887,14 @@ def main() -> None:
         print(f"   • Ground Truth Verification:           OPTIMAL (Verified via scipy.optimize.milp)")
         print(f"   • Merkle Provenance Root:              {vault.get_merkle_root()}")
 
-        # Automatic Forensic Analysis Markdown Persistence
+        # Automatic Forensic Analysis Markdown Persistence (Brief by default)
         slug = slugify_victim_name(result.victim_name)
+        is_full = getattr(args, "full", False)
+        is_brief = not is_full
         analysis_path_str = args.output_analysis or f"output/victim_{slug}_analysis.md"
         analysis_path = Path(analysis_path_str)
         analysis_path.parent.mkdir(parents=True, exist_ok=True)
-        analysis_text = tracer.generate_analysis_report(result, case_id=args.case_id, officer=args.officer)
+        analysis_text = tracer.generate_analysis_report(result, case_id=args.case_id, officer=args.officer, brief=is_brief)
         analysis_path.write_text(analysis_text, encoding="utf-8")
         vault.record_action("EXPORT_ANALYSIS_MD", f"Exported victim analysis report to {analysis_path.as_posix()}")
         print(f"\n📊 Forensic Analysis Markdown: {analysis_path.as_posix()}")
@@ -897,18 +908,68 @@ def main() -> None:
             vault.record_action("EXPORT_MD", f"Exported victim markdown dossier to {md_path}")
             print(f"\n📄 Markdown Court Dossier: {md_path.as_posix()}")
 
-        # Optional PDF Export
-        if args.output_pdf:
-            pdf_path = Path(args.output_pdf)
-            tracer.export_pdf(
-                result=result,
-                output_pdf_path=pdf_path,
-                case_id=args.case_id,
-                officer_name=args.officer,
-                font_name=args.font,
-            )
-            vault.record_action("EXPORT_PDF", f"Exported victim PDF dossier to {pdf_path}")
-            print(f"📑 Official PDF Court Dossier: {pdf_path.as_posix()}")
+        # Default Quarto Word/PDF Conversion (Rule 9 Governance)
+        no_quarto = getattr(args, "no_quarto", False)
+        quarto_mode = "none" if no_quarto else getattr(args, "quarto", "both")
+        doc_opt = getattr(args, "output_docx", None)
+        pdf_opt = getattr(args, "output_pdf", None)
+
+        if quarto_mode != "none" or doc_opt or pdf_opt:
+            from src.dossier.quarto_converter import convert_document, is_quarto_installed
+            if not is_quarto_installed():
+                print("⚠️ Quarto is not installed on this system. Unable to convert to Word/PDF.")
+            else:
+                formats_to_convert = []
+                if quarto_mode == "both":
+                    formats_to_convert = ["docx", "pdf"]
+                elif quarto_mode in ("docx", "pdf"):
+                    formats_to_convert = [quarto_mode]
+                else:
+                    if doc_opt:
+                        formats_to_convert.append("docx")
+                    if pdf_opt:
+                        formats_to_convert.append("pdf")
+
+                for q_fmt in formats_to_convert:
+                    custom_out = Path(doc_opt) if q_fmt == "docx" and doc_opt else (Path(pdf_opt) if q_fmt == "pdf" and pdf_opt else None)
+                    conv_res = convert_document(analysis_path, output_format=q_fmt, output_path=custom_out)
+                    vault.record_action(f"EXPORT_{q_fmt.upper()}", f"Converted victim analysis to {conv_res}")
+                    if q_fmt == "docx":
+                        print(f"📑 Quarto Converted DOCX:      {conv_res.as_posix()}")
+                    else:
+                        print(f"📑 Quarto Converted PDF:       {conv_res.as_posix()}")
+
+                # Generate landscape Diagram (Sankey Flow Topology) in DOCX and PDF
+                # Render exact high-fidelity ECharts Sankey image matching the dashboard
+                from src.ui.sankey_image_exporter import render_sankey_diagram_image
+                sankey_png_path = Path(f"output/victim_{slug}_sankey.png")
+                rel_img_for_md = sankey_png_path.name
+                try:
+                    render_sankey_diagram_image(result, sankey_png_path)
+                    vault.record_action("EXPORT_SANKEY_PNG", f"Rendered ECharts Sankey image to {sankey_png_path}")
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not render headless ECharts Sankey PNG: {e}")
+                    rel_img_for_md = None
+
+                diag_md_path = Path(f"output/victim_{slug}_diagram.md")
+                diag_md_content = tracer.generate_dispersal_diagram_markdown(
+                    result,
+                    case_id=args.case_id,
+                    officer=args.officer,
+                    sankey_image_rel_path=rel_img_for_md,
+                )
+                diag_md_path.write_text(diag_md_content, encoding="utf-8")
+                vault.record_action("EXPORT_DIAGRAM_MD", f"Exported victim diagram markdown to {diag_md_path}")
+                print(f"📊 Victim Diagram Markdown:     {diag_md_path.as_posix()}")
+
+                for diag_fmt in ["docx", "pdf"]:
+                    diag_out = Path(f"output/victim_{slug}_diagram.{diag_fmt}")
+                    diag_res = convert_document(diag_md_path, output_format=diag_fmt, output_path=diag_out, landscape=True)
+                    vault.record_action(f"EXPORT_DIAGRAM_{diag_fmt.upper()}", f"Converted victim diagram to {diag_res}")
+                    if diag_fmt == "docx":
+                        print(f"📑 Landscape Diagram DOCX:     {diag_res.as_posix()}")
+                    else:
+                        print(f"📑 Landscape Diagram PDF:      {diag_res.as_posix()}")
 
         # Optional AOC Freeze JSON Export
         if args.output_aoc:

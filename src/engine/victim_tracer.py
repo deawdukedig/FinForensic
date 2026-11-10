@@ -529,6 +529,56 @@ class VictimFlowTracer:
         lines.append("```")
         return "\n".join(lines)
 
+    def generate_dispersal_diagram_markdown(
+        self,
+        result: VictimTraceResult,
+        case_id: str = "CASE-VICTIM-001",
+        officer: str = "พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)",
+        sankey_image_rel_path: Optional[str] = None,
+    ) -> str:
+        """
+        Generates a dedicated Markdown document focusing on the victim's fund dispersal diagram
+        (Sankey flow topology rendered directly from the dashboard ECharts visualization),
+        suitable for wide landscape export to DOCX and PDF via Quarto.
+        """
+        lines = []
+        lines.append(TABLE_RESPONSIVE_STYLE)
+        lines.append(f"# ผังการกระจายเงินจากผู้เสียหายสู่ปลายทาง (Sankey Fund Dispersal Diagram)")
+        lines.append(f"**ผู้เสียหาย (Victim):** {result.victim_name} | **เลขที่สำนวนคดี:** `{case_id}` | **ผู้ตรวจพิสูจน์:** {officer}")
+        lines.append(f"**บัญชีม้าพักเงินแถว 1:** `{result.target_account}` ({result.target_account_name}) | **ความเสียหายรวม:** **฿{result.total_inflow_thb:,.2f}**")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("### แผนภาพแสดงเส้นทางการกระจายเงิน (Sankey Flow Topology):")
+        if sankey_image_rel_path:
+            clean_rel = sankey_image_rel_path.replace("\\", "/")
+            lines.append(f"![ผังการกระจายเงินจากผู้เสียหายสู่ปลายทาง (Sankey Flow Diagram)]({clean_rel})")
+        else:
+            lines.append(self.generate_dispersal_mermaid(result))
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("### สรุปปลายทางผู้รับผลประโยชน์หลัก (Top Beneficiaries Ledger):")
+        lines.append("")
+        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน | มาตรการแนะนำ |")
+        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |")
+
+        pct_claim = (result.total_claimable_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
+        for d in result.top_destinations:
+            acct_info = f"{d.bank} {d.account_no}" if d.account_no != "UNKNOWN" else d.bank
+            action_th = self._format_action_th(d.recommended_action)
+            lines.append(
+                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | {action_th} |"
+            )
+
+        tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)
+        tot_claim_sum = sum(d.proportional_claim_thb for d in result.top_destinations)
+        lines.append(
+            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** | **AOC 1441 / ปปง. ม.49/1** |"
+        )
+        lines.append("")
+        return "\n".join(lines)
+
     def generate_markdown_report(
         self,
         result: VictimTraceResult,
@@ -627,14 +677,18 @@ class VictimFlowTracer:
         result: VictimTraceResult,
         case_id: str = "CASE-VICTIM-001",
         officer: str = "พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)",
+        brief: bool = False,
     ) -> str:
         """
-        Generates an exhaustive, high-depth investigative forensic analysis report in Markdown.
+        Generates an investigative forensic analysis report in Markdown.
+        If brief=True, creates a concise brief report containing Sections 1-3
+        and omitting Sections 4, 5, 6, 7 (MILP, Restitution, Directives, Chain of Custody).
         Persisted automatically to output/victim_<name_slug>_analysis.md.
         """
         lines = []
         lines.append(TABLE_RESPONSIVE_STYLE)
-        lines.append("# รายงานวิเคราะห์เส้นทางการเงินเชิงลึกเฉพาะผู้เสียหาย (Victim Forensic Analysis Report)")
+        report_title = "รายงานวิเคราะห์เส้นทางการเงินเชิงลึกเฉพาะผู้เสียหาย (ฉบับย่อ)" if brief else "รายงานวิเคราะห์เส้นทางการเงินเชิงลึกเฉพาะผู้เสียหาย (Victim Forensic Analysis Report)"
+        lines.append(f"# {report_title}")
         lines.append(f"**เลขที่สำนวนคดี (Case ID):** `{case_id}`  ")
         lines.append(f"**ผู้ตรวจพิสูจน์ (Forensic Investigator):** {officer}  ")
         lines.append(f"**วันเวลาที่จัดทำเอกสาร:** {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M:%S UTC')}  ")
@@ -771,6 +825,11 @@ class VictimFlowTracer:
         else:
             lines.append("- **การตรวจสอบความเชื่อมโยงบัญชีม้า (Mule Network Linkage):** ตรวจสอบประวัติบัญชีม้าแถว 1 และแถว 2 ในฐานข้อมูล ศปอส.ตร. / AOC 1441 เพื่อหาความเชื่อมโยงกับผู้เสียหายรายอื่นในกลุ่มขบวนการเดียวกัน")
         lines.append("")
+
+        # If brief report requested, omit Sections 4, 5, 6, 7
+        if brief:
+            return "\n".join(lines)
+
         lines.append("---")
         lines.append("")
 

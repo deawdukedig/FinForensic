@@ -192,10 +192,13 @@ class EvidenceDossierGenerator:
         report: SuspicionReport,
         transactions: List[BankTransaction],
         vault: EvidenceVault,
+        brief: bool = False,
     ) -> str:
         """
-        Generates comprehensive statement-wide forensic analysis report in Markdown.
-        Adheres strictly to Rule 7 & Rule 9 (7-section structure, TABLE_RESPONSIVE_STYLE,
+        Generates statement-wide forensic analysis report in Markdown.
+        If brief=True, creates a concise brief report containing Sections 1-3
+        and omitting Sections 4, 5, 6, 7 (MILP, Restitution, Directives, Chain of Custody).
+        Adheres strictly to Rule 7 & Rule 9 (TABLE_RESPONSIVE_STYLE,
         KaTeX equations, Mermaid topology, legal neutrality, and relative paths).
         """
         receipt = vault.generate_admissibility_receipt(report.statement_hash_sha256)
@@ -293,7 +296,8 @@ class EvidenceDossierGenerator:
 
         lines = []
         lines.append(TABLE_RESPONSIVE_STYLE)
-        lines.append("# รายงานวิเคราะห์เส้นทางการเงินเชิงลึกรวมระดับบัญชี (Statement Forensic Analysis Report)")
+        report_title = "รายงานวิเคราะห์เส้นทางการเงินเชิงลึกรวมระดับบัญชี (ฉบับย่อ)" if brief else "รายงานวิเคราะห์เส้นทางการเงินเชิงลึกรวมระดับบัญชี (Statement Forensic Analysis Report)"
+        lines.append(f"# {report_title}")
         lines.append(f"**เลขที่สำนวนคดี (Case ID):** `{self.case_id}`  ")
         lines.append(f"**ผู้ตรวจพิสูจน์ (Forensic Investigator):** {self.officer}  ")
         lines.append(f"**วันเวลาที่จัดทำเอกสาร:** {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M:%S UTC')}  ")
@@ -418,6 +422,11 @@ class EvidenceDossierGenerator:
         else:
             lines.append("- **การตรวจสอบความเชื่อมโยงบัญชีม้า (Mule Network Linkage):** ตรวจสอบประวัติบัญชีม้าแถว 1 และแถว 2 ในฐานข้อมูล ศปอส.ตร. / AOC 1441 เพื่อหาความเชื่อมโยงกับผู้เสียหายรายอื่นในกลุ่มขบวนการเดียวกัน")
         lines.append("")
+
+        # If brief report requested, omit Sections 4, 5, 6, 7
+        if brief:
+            return "\n".join(lines)
+
         lines.append("---")
         lines.append("")
 
