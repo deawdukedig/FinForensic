@@ -6,7 +6,7 @@ supporting 5 specialized forensic tabs:
 2. กราฟโครงข่ายเชื่อมโยง (Network Topology)
 3. เส้นเวลาและความเร็ว (Timeline & Velocity)
 4. รายการธุรกรรมเชิงลึก (Transactions)
-5. สถิติเชิงลึกและการวิเคราะห์ข้อมูล (Forensic Data Analytics & FAQ Engine)
+5. สถิติเชิงลึกและการวิเคราะห์ข้อมูล (Forensic Data Analytics)
 """
 
 from __future__ import annotations
@@ -129,21 +129,51 @@ class ForensicDashboardGenerator:
         timeline_cum_out_json = json.dumps(timeline_cum_out, ensure_ascii=False)
 
         # Build Force-directed Network Graph
-        graph_nodes = [{"id": target_name, "name": target_name, "symbolSize": 50, "category": 0}]
+        # Category classification:
+        # 0: บัญชีม้าแถว 1 (Target Mule Tier-1) -> สีส้ม/ทอง
+        # 1: เหยื่อ / ผู้เสียหาย / แหล่งเงินเข้า (Victims / Inflow Originators) -> สีเขียว (Emerald)
+        # 2: บัญชีม้าแถว 2 / ปลายทางระบายเงิน (Mule Tier-2 / Dispersal Beneficiaries) -> สีแดง/กุหลาบ (Rose)
+        graph_categories = [
+            {"name": "บัญชีม้าแถว 1 (เป้าหมาย)", "itemStyle": {"color": "#f59e0b"}},
+            {"name": "เหยื่อ / ผู้เสียหาย (เงินเข้า)", "itemStyle": {"color": "#10b981"}},
+            {"name": "บัญชีม้าแถว 2 (รับโอนต่อ)", "itemStyle": {"color": "#f43f5e"}},
+        ]
+
+        graph_nodes = [{
+            "id": target_name,
+            "name": target_name,
+            "symbolSize": 50,
+            "category": 0,
+            "itemStyle": {"color": "#f59e0b", "borderColor": "#d97706", "borderWidth": 2},
+            "role": "บัญชีม้าแถว 1 (Target Mule Tier-1)",
+        }]
         graph_links = []
         for l in links:
             is_in = (l["target"] == target_name)
             other = l["source"] if is_in else l["target"]
+            cat_idx = 1 if is_in else 2
+            node_color = "#10b981" if is_in else "#f43f5e"
+            node_border = "#059669" if is_in else "#e11d48"
+            role_title = "เหยื่อ / ผู้เสียหาย (Victim / Inflow)" if is_in else "บัญชีม้าแถว 2 (Mule Tier-2 / Outflow)"
+            
             graph_nodes.append({
                 "id": other,
                 "name": other,
-                "symbolSize": max(20, min(45, int(l["value"] / 10000))),
-                "category": 1 if is_in else 2,
+                "symbolSize": max(22, min(48, int(l["value"] / 10000))),
+                "category": cat_idx,
+                "itemStyle": {"color": node_color, "borderColor": node_border, "borderWidth": 1.5},
+                "role": role_title,
+                "value": l["value"],
             })
             graph_links.append({
                 "source": l["source"],
                 "target": l["target"],
                 "value": l["value"],
+                "lineStyle": {
+                    "color": "#10b981" if is_in else "#f43f5e",
+                    "width": max(1.5, min(6.0, (l["value"] / 50000.0) + 1.5)),
+                    "curveness": 0.1,
+                }
             })
 
         # Remove duplicate graph nodes by id
@@ -661,7 +691,6 @@ class ForensicDashboardGenerator:
             color: #38bdf8 !important;
             font-weight: 700 !important;
         }}
-        .faq-pill:hover {{ transform: translateY(-1px); }}
 
         /* Fullscreen Presentation Styles */
         :fullscreen, ::backdrop {{
@@ -764,39 +793,6 @@ class ForensicDashboardGenerator:
             </div>
         </div>
 
-        <!-- Section 12 Upgrade: FAQ Quick-Filter Toolbar (7 Core Judicial Questions) -->
-        <div class="bg-white dark:bg-slate-850 p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 shadow-sm">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>⚡</span> ทางลัดตอบคำถามยอดฮิตของพนักงานสอบสวนและศาล (7 Judicial FAQ Quick-Filters)
-                </span>
-                <span class="text-[11px] text-slate-500 dark:text-slate-400">คลิกเพื่อสลับไปยังพยานหลักฐานเชิงประจักษ์ทันที</span>
-            </div>
-            <div class="flex flex-wrap gap-2 text-xs">
-                <button onclick="handleFaq(1)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-sky-950 border border-slate-300 dark:border-slate-700 hover:border-sky-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
-                    💸 FAQ 1: เงินไหลไปหาใครบ้าง?
-                </button>
-                <button onclick="handleFaq(2)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-rose-950 border border-slate-300 dark:border-slate-700 hover:border-rose-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
-                    🚨 FAQ 2: บัญชีม้าแน่นอนไหม?
-                </button>
-                <button onclick="handleFaq(3)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-amber-950 border border-slate-300 dark:border-slate-700 hover:border-amber-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
-                    🔒 FAQ 3: ควรอายัดบัญชีไหนก่อน?
-                </button>
-                <button onclick="handleFaq(4)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-emerald-950 border border-slate-300 dark:border-slate-700 hover:border-emerald-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
-                    ⏱️ FAQ 4: เริ่มก่อเหตุเมื่อไหร่?
-                </button>
-                <button onclick="handleFaq(5)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-purple-950 border border-slate-300 dark:border-slate-700 hover:border-purple-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
-                    🏧 FAQ 5: เงินสด/คริปโตเท่าไหร่?
-                </button>
-                <button onclick="handleFaq(6)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-cyan-950 border border-slate-300 dark:border-slate-700 hover:border-cyan-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
-                    🤖 FAQ 6: ใช้บอทโอนเงินหรือไม่?
-                </button>
-                <button onclick="handleFaq(7)" class="faq-pill px-3 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/80 dark:hover:bg-indigo-950 border border-slate-300 dark:border-slate-700 hover:border-indigo-500 rounded-lg text-slate-700 dark:text-slate-300 font-medium transition">
-                    🕸️ FAQ 7: ขบวนการเดียวกันไหม?
-                </button>
-            </div>
-        </div>
-
         <!-- Tab Controls -->
         <div class="flex border-b border-slate-300 dark:border-slate-700 space-x-6 text-sm">
             <button onclick="switchTab('tab-sankey')" id="btn-tab-sankey" class="tab-btn active pb-3 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
@@ -832,14 +828,21 @@ class ForensicDashboardGenerator:
 
         <!-- Tab 2: Network Topology -->
         <div id="tab-network" class="tab-content hidden bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col shadow-sm">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <div>
                     <h2 class="text-lg font-bold text-slate-900 dark:text-white">โครงข่ายความสัมพันธ์หลายมิติ (Multi-Hop Force-Directed Graph)</h2>
-                    <p class="text-xs text-slate-600 dark:text-slate-400">สามารถคลิกลากจุดเพื่อตรวจสอบศูนย์กลางการรับเงินและการกระจายเงิน</p>
+                    <p class="text-xs text-slate-600 dark:text-slate-400">แยกกลุ่มสีเพื่อตรวจสอบศูนย์กลางการรับเงินและการกระจายเงิน: <span class="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">🟢 เหยื่อ/ผู้เสียหาย</span> <span class="text-slate-400 font-bold">&rarr;</span> <span class="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400">🟡 ม้าแถว 1</span> <span class="text-slate-400 font-bold">&rarr;</span> <span class="inline-flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400">🔴 ม้าแถว 2</span></p>
                 </div>
-                <button onclick="toggleCardFullscreen('tab-network', 'networkChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
-                    <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
-                </button>
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-3 px-3 py-1 bg-slate-100 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                        <span class="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-semibold"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> เหยื่อ</span>
+                        <span class="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> ม้าแถว 1</span>
+                        <span class="flex items-center gap-1 text-rose-700 dark:text-rose-400 font-semibold"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> ม้าแถว 2</span>
+                    </div>
+                    <button onclick="toggleCardFullscreen('tab-network', 'networkChart')" class="fullscreen-btn px-2.5 py-1.5 bg-slate-900/90 hover:bg-slate-700 text-sky-400 border border-slate-700 hover:border-sky-500 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0" title="ขยายเต็มจอสำหรับนำเสนอ">
+                        <span class="fs-icon">⛶</span> <span class="fs-text">ขยายเต็มจอ</span>
+                    </button>
+                </div>
             </div>
             <div id="chart-network" class="chart-container" style="width: 100%; height: 500px;"></div>
         </div>
@@ -1090,6 +1093,7 @@ class ForensicDashboardGenerator:
         const sankeyLinks = {json.dumps(links, ensure_ascii=False)};
         const graphNodes = {json.dumps(unique_graph_nodes, ensure_ascii=False)};
         const graphLinks = {json.dumps(graph_links, ensure_ascii=False)};
+        const graphCategories = {json.dumps(graph_categories, ensure_ascii=False)};
         const timelineData = {json.dumps(timeline_data, ensure_ascii=False)};
 
         // Section 12 Extended Analytics Data
@@ -1149,17 +1153,47 @@ class ForensicDashboardGenerator:
                 tooltip: {{
                     backgroundColor: tc.tooltipBg,
                     borderColor: tc.tooltipBorder,
-                    textStyle: {{ color: tc.tooltipText, fontFamily: 'Sarabun' }}
+                    textStyle: {{ color: tc.tooltipText, fontFamily: 'Sarabun' }},
+                    formatter: function(params) {{
+                        if (params.dataType === 'node') {{
+                            const d = params.data;
+                            let roleColor = '#f59e0b';
+                            if (d.category === 1) roleColor = '#10b981';
+                            if (d.category === 2) roleColor = '#f43f5e';
+                            
+                            let html = '<div class="font-bold border-b border-slate-700/60 pb-1 mb-1.5" style="color:' + roleColor + '">🏷️ ' + (d.role || 'บัญชีในโครงข่าย') + '</div>';
+                            html += '<div class="text-xs space-y-1">';
+                            html += '<div><b>ชื่อบัญชี:</b> ' + d.name + '</div>';
+                            if (d.value) {{
+                                html += '<div><b>ยอดเงินรวม:</b> <span class="font-mono font-bold text-sky-400">฿' + Number(d.value).toLocaleString('en-US', {{minimumFractionDigits: 2}}) + '</span></div>';
+                            }}
+                            html += '</div>';
+                            return html;
+                        }} else if (params.dataType === 'edge') {{
+                            const d = params.data;
+                            return '<div class="text-xs"><b>เส้นทางการโอน:</b><br/>' +
+                                   d.source + ' <span class="text-sky-400">➔</span> ' + d.target + '<br/>' +
+                                   '<b>ยอดเงิน:</b> <span class="font-mono text-emerald-400 font-bold">฿' + Number(d.value).toLocaleString('en-US', {{minimumFractionDigits: 2}}) + '</span></div>';
+                        }}
+                        return params.name;
+                    }}
                 }},
+                legend: [{{
+                    data: graphCategories.map(c => c.name),
+                    top: '2%',
+                    textStyle: {{ color: tc.labelColor, fontFamily: 'Sarabun', fontSize: 12 }},
+                    itemGap: 18,
+                }}],
                 series: [{{
                     type: 'graph',
                     layout: 'force',
                     data: graphNodes,
                     links: graphLinks,
+                    categories: graphCategories,
                     roam: true,
                     label: {{ show: true, position: 'right', color: tc.nodeLabelColor, fontFamily: 'Sarabun', fontSize: 11 }},
-                    force: {{ repulsion: 400, edgeLength: [80, 150] }},
-                    lineStyle: {{ color: tc.isDark ? '#94a3b8' : '#64748b', width: 2, curveness: 0.1 }}
+                    force: {{ repulsion: 450, edgeLength: [90, 160] }},
+                    lineStyle: {{ width: 2, curveness: 0.12 }}
                 }}]
             }});
         }}
@@ -1500,32 +1534,6 @@ class ForensicDashboardGenerator:
             }}
         }}
 
-        function handleFaq(faqNum) {{
-            if (faqNum === 1) {{
-                switchTab('tab-sankey');
-            }} else if (faqNum === 2) {{
-                switchTab('tab-sankey');
-                window.scrollTo({{ top: 0, behavior: 'smooth' }});
-            }} else if (faqNum === 3) {{
-                switchTab('tab-table');
-                window.scrollTo({{ top: 0, behavior: 'smooth' }});
-            }} else if (faqNum === 4) {{
-                switchTab('tab-timeline');
-            }} else if (faqNum === 5) {{
-                switchTab('tab-analytics');
-                setTimeout(() => {{
-                    const el = document.getElementById('chart-channels');
-                    if (el) el.scrollIntoView({{ behavior: 'smooth' }});
-                }}, 100);
-            }} else if (faqNum === 6) {{
-                switchTab('tab-analytics');
-                document.getElementById('leaderboard-metric').value = 'velocity';
-                renderLeaderboard();
-            }} else if (faqNum === 7) {{
-                switchTab('tab-network');
-            }}
-        }}
-
         function showToast(msg) {{
             const toast = document.getElementById('toast');
             const toastMsg = document.getElementById('toastMsg');
@@ -1725,9 +1733,9 @@ class ForensicDashboardGenerator:
             if (window.networkChart) {{
                 window.networkChart.setOption({{
                     tooltip: {{ backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: {{ color: tooltipText, fontFamily: 'Sarabun' }} }},
+                    legend: [{{ textStyle: {{ color: labelColor, fontFamily: 'Sarabun' }} }}],
                     series: [{{
-                        label: {{ color: nodeLabel, fontFamily: 'Sarabun' }},
-                        lineStyle: {{ color: isDark ? '#94a3b8' : '#64748b' }}
+                        label: {{ color: nodeLabel, fontFamily: 'Sarabun' }}
                     }}]
                 }});
             }}
