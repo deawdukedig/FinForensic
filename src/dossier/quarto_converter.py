@@ -398,7 +398,7 @@ def transform_mermaid_blocks(markdown_content: str) -> str:
         if "layout-align" not in body:
             headers.append("%%| layout-align: center")
         if "%%{init:" not in body:
-            headers.append('%%{init: { "theme": "default", "themeVariables": { "fontFamily": "TH Sarabun New, Tahoma, sans-serif", "fontSize": "16px" } }}%%')
+            headers.append('%%{init: { "theme": "default", "themeVariables": { "fontFamily": "Tahoma, Arial, sans-serif", "fontSize": "16px" } }}%%')
 
         header_str = "\n".join(headers) + "\n" if headers else ""
         return "```{mermaid}\n" + header_str + body
