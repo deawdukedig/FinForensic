@@ -147,10 +147,12 @@ def render_sankey_diagram_image(
     output_png_path: Path,
     width: int = 1600,
     height: int = 800,
+    scale_factor: int = 2,
 ) -> Path:
     """
     Renders the exact ECharts Sankey diagram to a high-resolution PNG image
     using chrome-headless-shell or Chrome.
+    Uses --force-device-scale-factor to produce crisp, high-DPI (Retina) output.
     """
     chrome_bin = get_chrome_headless_bin()
     if not chrome_bin:
@@ -166,6 +168,7 @@ def render_sankey_diagram_image(
             chrome_bin,
             f"--screenshot={output_png_path.resolve().as_posix()}",
             f"--window-size={width},{height}",
+            f"--force-device-scale-factor={scale_factor}",
             "--hide-scrollbars",
             "--disable-gpu",
             file_url,

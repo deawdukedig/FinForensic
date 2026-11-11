@@ -433,10 +433,12 @@ class VictimFlowTracer:
 
     def generate_dispersal_mermaid(self, result: VictimTraceResult) -> str:
         """Generates a court-admissible Mermaid flowchart visualizing the victim's fund dispersal."""
+        v_label = f"ผู้เสียหาย: {result.victim_name}<br/>(ยอดเงินเข้า: ฿{result.total_inflow_thb:,.2f})"
+        m_label = f"บัญชีม้าแถว 1: {result.target_account}<br/>({result.target_account_name})"
         lines = [
             "```mermaid",
             "flowchart LR",
-            f'    V["ผู้เสียหาย: {result.victim_name} (฿{result.total_inflow_thb:,.2f})"] -->|โอนเงิน {len(result.inflow_transactions)} รายการ| M["บัญชีม้าแถว 1: {result.target_account}"]',
+            f'    V["{v_label}"] -->|โอนเข้า {len(result.inflow_transactions)} รายการ| M["{m_label}"]',
         ]
 
         tier2 = [d for d in result.top_destinations if d.recommended_action == "AOC_1441_FREEZE_URGENT"]
@@ -456,15 +458,15 @@ class VictimFlowTracer:
                     node_id = f"T2_{idx}"
                     clean_name = d.account_name.replace('"', "'")
                     clean_acct = d.account_no.replace('"', "")
-                    name_str = f" {clean_name}" if clean_name not in ("N/A", "", "UNKNOWN") else ""
-                    label = f"{d.bank} {clean_acct}{name_str}: ฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
+                    name_str = f"<br/>{clean_name}" if clean_name not in ("N/A", "", "UNKNOWN") else ""
+                    label = f"{d.bank} {clean_acct}{name_str}<br/>฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
                     lines.append(f'        {node_id}["{label}"]')
                     edges.append(f"    M -->|Mobile Transfer| {node_id}")
 
                 rest_sum = sum(d.proportional_claim_thb for d in rest_t2)
                 rest_pct = (rest_sum / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
                 rest_node = "T2_REST"
-                rest_label = f"บัญชีม้าแถว 2 อื่นๆ ({len(rest_t2)} บัญชี): ฿{rest_sum:,.2f} ({rest_pct:.1f}%)"
+                rest_label = f"บัญชีม้าแถว 2 อื่นๆ ({len(rest_t2)} บัญชี)<br/>฿{rest_sum:,.2f} ({rest_pct:.1f}%)"
                 lines.append(f'        {rest_node}["{rest_label}"]')
                 edges.append(f"    M -->|Mobile Transfer| {rest_node}")
             else:
@@ -472,8 +474,8 @@ class VictimFlowTracer:
                     node_id = f"T2_{idx}"
                     clean_name = d.account_name.replace('"', "'")
                     clean_acct = d.account_no.replace('"', "")
-                    name_str = f" {clean_name}" if clean_name not in ("N/A", "", "UNKNOWN") else ""
-                    label = f"{d.bank} {clean_acct}{name_str}: ฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
+                    name_str = f"<br/>{clean_name}" if clean_name not in ("N/A", "", "UNKNOWN") else ""
+                    label = f"{d.bank} {clean_acct}{name_str}<br/>฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
                     lines.append(f'        {node_id}["{label}"]')
                     edges.append(f"    M -->|Mobile Transfer| {node_id}")
             lines.append("    end")
@@ -486,7 +488,7 @@ class VictimFlowTracer:
                 clean_name = d.account_name.replace('"', "'")
                 clean_acct = d.account_no.replace('"', "")
                 display_title = f"{d.bank} {clean_acct}" if clean_name in ("N/A", "", "UNKNOWN") else f"{clean_name} ({d.bank})"
-                label = f"{display_title}: ฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
+                label = f"{display_title}<br/>฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
                 lines.append(f'        {node_id}["{label}"]')
                 edges.append(f"    M -->|Cardless ATM| {node_id}")
             lines.append("    end")
@@ -499,7 +501,7 @@ class VictimFlowTracer:
                 clean_name = d.account_name.replace('"', "'")
                 clean_acct = d.account_no.replace('"', "")
                 display_title = f"{d.bank} {clean_acct}" if clean_name in ("N/A", "", "UNKNOWN") else f"{d.bank} {clean_name}"
-                label = f"{display_title}: ฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
+                label = f"{display_title}<br/>฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
                 lines.append(f'        {node_id}["{label}"]')
                 edges.append(f"    M -->|P2P OTC| {node_id}")
             lines.append("    end")
@@ -512,7 +514,7 @@ class VictimFlowTracer:
                 clean_name = d.account_name.replace('"', "'")
                 clean_acct = d.account_no.replace('"', "")
                 display_title = f"{d.bank} {clean_acct}" if clean_name in ("N/A", "", "UNKNOWN") else f"{clean_name} ({d.bank})"
-                label = f"{display_title}: ฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
+                label = f"{display_title}<br/>฿{d.proportional_claim_thb:,.2f} ({d.percentage_of_victim_funds:.1f}%)"
                 lines.append(f'        {node_id}["{label}"]')
                 edges.append(f"    M -->|Payment/Ads| {node_id}")
             lines.append("    end")
@@ -521,7 +523,7 @@ class VictimFlowTracer:
         if result.net_residual_buffer_thb > 0:
             res_pct = (result.net_residual_buffer_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
             lines.append('    subgraph BUFFER["เงินตกค้างในบัญชีม้า (Residual Buffer)"]')
-            lines.append(f'        BUF["เงินค้างรอฟอก: ฿{result.net_residual_buffer_thb:,.2f} ({res_pct:.1f}%)"]')
+            lines.append(f'        BUF["เงินค้างรอฟอก<br/>฿{result.net_residual_buffer_thb:,.2f} ({res_pct:.1f}%)"]')
             lines.append("    end")
             edges.append("    M -.->|ค้างในบัญชี| BUF")
 
@@ -986,10 +988,10 @@ class VictimFlowTracer:
             clean_name = re.sub(r"[^\w\s-]", "", result.victim_name).strip()
             slug = re.sub(r"[-\s]+", "_", clean_name).lower() or "victim"
 
-        # 1. Render high-resolution ECharts Sankey PNG via background headless Chrome
+        # 1. Render high-resolution ECharts Sankey PNG via background headless Chrome (2x Retina scale)
         png_path = out_dir / f"victim_{slug}_sankey.png"
         try:
-            render_sankey_diagram_image(result, png_path, width=1600, height=800)
+            render_sankey_diagram_image(result, png_path, width=1600, height=800, scale_factor=2)
             img_rel_name = png_path.name
         except Exception as e:
             # Fallback to mermaid if headless chrome is unavailable
