@@ -560,21 +560,20 @@ class VictimFlowTracer:
         lines.append("")
         lines.append("### สรุปปลายทางผู้รับผลประโยชน์หลัก (Top Beneficiaries Ledger):")
         lines.append("")
-        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน | มาตรการแนะนำ |")
-        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |")
+        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน |")
+        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: |")
 
         pct_claim = (result.total_claimable_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
         for d in result.top_destinations:
             acct_info = f"{d.bank} {d.account_no}" if d.account_no != "UNKNOWN" else d.bank
-            action_th = self._format_action_th(d.recommended_action)
             lines.append(
-                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | {action_th} |"
+                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% |"
             )
 
         tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)
         tot_claim_sum = sum(d.proportional_claim_thb for d in result.top_destinations)
         lines.append(
-            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** | **AOC 1441 / ปปง. ม.49/1** |"
+            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** |"
         )
         lines.append("")
         return "\n".join(lines)
@@ -619,20 +618,19 @@ class VictimFlowTracer:
         lines.append(self.generate_dispersal_mermaid(result))
         lines.append("")
         pct_claim = (result.total_claimable_thb / result.total_inflow_thb * 100.0) if result.total_inflow_thb > 0 else 0.0
-        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน | มาตรการแนะนำ |")
-        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |")
+        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน |")
+        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: |")
 
         for d in result.top_destinations:
             acct_info = f"{d.bank} {d.account_no}" if d.account_no != "UNKNOWN" else d.bank
-            action_th = self._format_action_th(d.recommended_action)
             lines.append(
-                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | {action_th} |"
+                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% |"
             )
 
         tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)
         tot_claim_sum = sum(d.proportional_claim_thb for d in result.top_destinations)
         lines.append(
-            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** | **AOC 1441 / ปปง. ม.49/1** |"
+            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** |"
         )
         lines.append("")
         lines.append("---")
@@ -721,20 +719,19 @@ class VictimFlowTracer:
         lines.append("### แผนภาพแสดงเส้นทางการกระจายเงิน (Fund Dispersal Topology):")
         lines.append(self.generate_dispersal_mermaid(result))
         lines.append("")
-        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน | มาตรการแนะนำ |")
-        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |")
+        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน |")
+        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: |")
 
         for d in result.top_destinations:
             acct_info = f"{d.bank} {d.account_no}" if d.account_no != "UNKNOWN" else d.bank
-            action_th = self._format_action_th(d.recommended_action)
             lines.append(
-                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | {action_th} |"
+                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% |"
             )
 
         tot_drained_sum = sum(d.total_drained_thb for d in result.top_destinations)
         tot_claim_sum = sum(d.proportional_claim_thb for d in result.top_destinations)
         lines.append(
-            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** | **AOC 1441 / ปปง. ม.49/1** |"
+            f"| **รวม** | - | **รวมทั้งสิ้น {len(result.top_destinations)} ปลายทาง** | - | **฿{tot_drained_sum:,.2f}** | **฿{tot_claim_sum:,.2f}** | **{pct_claim:.1f}%** |"
         )
         lines.append("")
         tier2_mules = [d for d in result.top_destinations if d.recommended_action == "AOC_1441_FREEZE_URGENT"]
@@ -961,6 +958,77 @@ class VictimFlowTracer:
             officer=officer,
             tolerance_ratio=self.tolerance_ratio,
         )
+
+    def generate_dispersal_diagram_suite(
+        self,
+        result: VictimTraceResult,
+        output_dir: Union[str, Path] = Path("output"),
+        slug: Optional[str] = None,
+        case_id: str = "CASE-VICTIM-2026",
+        officer: str = "พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)",
+        export_formats: Tuple[str, ...] = ("md", "docx"),
+    ) -> Dict[str, Path]:
+        """
+        Automatically exports the ECharts Sankey Flow Diagram directly to PNG via headless Chrome,
+        embeds it into a dedicated landscape Markdown diagram file, and renders DOCX
+        utilizing Quarto and TH Sarabun New. (PDF export is opt-in only).
+
+        Returns:
+            Dictionary containing paths to the generated files: 'png', 'md', 'docx' (and 'pdf' if opted-in)
+        """
+        from src.ui.sankey_image_exporter import render_sankey_diagram_image
+        from src.dossier.quarto_converter import convert_document, is_quarto_installed
+
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        if not slug:
+            clean_name = re.sub(r"[^\w\s-]", "", result.victim_name).strip()
+            slug = re.sub(r"[-\s]+", "_", clean_name).lower() or "victim"
+
+        # 1. Render high-resolution ECharts Sankey PNG via background headless Chrome
+        png_path = out_dir / f"victim_{slug}_sankey.png"
+        try:
+            render_sankey_diagram_image(result, png_path, width=1600, height=800)
+            img_rel_name = png_path.name
+        except Exception as e:
+            # Fallback to mermaid if headless chrome is unavailable
+            png_path = None
+            img_rel_name = None
+
+        # 2. Generate Markdown diagram document
+        md_path = out_dir / f"victim_{slug}_diagram.md"
+        md_content = self.generate_dispersal_diagram_markdown(
+            result=result,
+            case_id=case_id,
+            officer=officer,
+            sankey_image_rel_path=img_rel_name,
+        )
+        md_path.write_text(md_content, encoding="utf-8")
+
+        generated: Dict[str, Path] = {"md": md_path}
+        if png_path and png_path.exists():
+            generated["png"] = png_path
+
+        # 3. Quarto document conversion for DOCX and PDF (Landscape mode)
+        if is_quarto_installed():
+            for fmt in export_formats:
+                if fmt in ("docx", "pdf"):
+                    target_file = out_dir / f"victim_{slug}_diagram.{fmt}"
+                    try:
+                        convert_document(
+                            input_md_path=md_path,
+                            output_format=fmt,
+                            output_path=target_file,
+                            landscape=True,
+                            toc=False,
+                        )
+                        if target_file.exists():
+                            generated[fmt] = target_file
+                    except Exception:
+                        pass
+
+        return generated
 
     def export_pdf(
         self,

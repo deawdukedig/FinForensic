@@ -187,6 +187,160 @@ def ensure_docx_reference_template(template_path: Optional[Path] = None, landsca
     return template_path
 
 
+def _apply_beneficiary_table_widths(tbl, is_landscape: bool) -> None:
+    """
+    Applies custom column widths to the Top Beneficiaries Ledger table:
+    Minimizes 'ลำดับ' (Col 0) and 'สัดส่วน' down to ~6 characters,
+    allocating the remaining width to account names, banks, channels, and amounts.
+    Supports both 7-column (without recommended action) and 8-column variants.
+    """
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    col_count = len(tbl.columns)
+    if col_count == 7:
+        # 7 columns: [ลำดับ, ธนาคาร/เลขบัญชี, ชื่อบัญชีปลายทาง, ช่องทาง, ยอดเงินออก (฿), สิทธิขอคืน (฿), สัดส่วน]
+        # Landscape total ~10.5 in, Portrait total ~7.15 in
+        if is_landscape:
+            widths = [0.50, 1.80, 2.70, 1.20, 1.80, 1.80, 0.70]
+        else:
+            widths = [0.45, 1.25, 1.70, 0.85, 1.15, 1.20, 0.55]
+    elif col_count == 8:
+        # 8 columns variant (with recommended action)
+        if is_landscape:
+            widths = [0.50, 1.50, 2.10, 1.00, 1.40, 1.40, 0.70, 1.90]
+        else:
+            widths = [0.45, 1.05, 1.25, 0.70, 0.95, 0.95, 0.55, 1.25]
+    else:
+        return
+
+    grids = tbl._tbl.xpath(".//w:tblGrid")
+    if grids:
+        grid = grids[0]
+        for col_elem in list(grid.xpath(".//w:gridCol")):
+            grid.remove(col_elem)
+        for w in widths:
+            col = OxmlElement("w:gridCol")
+            col.set(qn("w:w"), str(int(w * 1440)))
+            grid.append(col)
+
+    for r in tbl.rows:
+        for i, c in enumerate(r.cells):
+            tcPr = c._tc.get_or_add_tcPr()
+            tcW = tcPr.xpath(".//w:tcW")
+            if tcW:
+                node = tcW[0]
+            else:
+                node = OxmlElement("w:tcW")
+                tcPr.append(node)
+            node.set(qn("w:w"), str(int(widths[i] * 1440)))
+            node.set(qn("w:type"), "dxa")
+
+
+def _post_process_landscape_docx(docx_path: Union[str, Path]) -> None:
+    """
+    Optimizes landscape DOCX document to visually align with PDF landscape layout:
+    1. Sets standard 1.5cm page margins (top, bottom, left, right).
+    2. Removes duplicated Title paragraph if Heading 1 immediately follows with the same text.
+    3. Resizes embedded Sankey / topology diagram images to 9.0 x 4.0 inches, ensuring
+       Page 1 content fits completely within printable height without premature page spill.
+    4. Compacts vertical paragraph spacing (space_before / space_after) on Page 1 and Table heading.
+    5. Inserts a clean page break before Section 2 / Table header so the table starts neatly on Page 2.
+    6. Compacts table cell padding, enables w:cantSplit on table rows, minimizes Col 0 & Col 6 widths,
+       and repeats header row, guaranteeing seamless multi-page continuation.
+    """
+    try:
+        import docx
+        from docx.shared import Inches, Cm, Pt
+        from docx.enum.table import WD_TABLE_ALIGNMENT
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        doc = docx.Document(str(docx_path))
+        if not doc.sections:
+            return
+
+        # 1. Margins: 1.5 cm all around
+        for sec in doc.sections:
+            sec.top_margin = Cm(1.5)
+            sec.bottom_margin = Cm(1.5)
+            sec.left_margin = Cm(1.5)
+            sec.right_margin = Cm(1.5)
+
+        # 2. Remove duplicated Title if followed by Heading 1
+        if len(doc.paragraphs) >= 2:
+            p0 = doc.paragraphs[0]
+            p1 = doc.paragraphs[1]
+            if p0.style.name.lower() == "title" and p0.text.strip() == p1.text.strip():
+                p0._p.getparent().remove(p0._p)
+
+        # 3. Resize embedded diagram images to fit safely within Page 1 (9.0 x 4.0 inches)
+        for inline in doc.inline_shapes:
+            try:
+                inline.width = Inches(9.0)
+                inline.height = Inches(4.0)
+            except Exception:
+                pass
+
+        # 4. Compact vertical spacing on Page 1 paragraphs & center alignment
+        page1_end_idx = 0
+        for i, p in enumerate(doc.paragraphs):
+            if "สรุปปลายทางผู้รับผลประโยชน์หลัก" in p.text or "Top Beneficiaries Ledger" in p.text:
+                page1_end_idx = i
+                break
+
+        for p in doc.paragraphs[:page1_end_idx]:
+            p.paragraph_format.space_before = Pt(2)
+            p.paragraph_format.space_after = Pt(2)
+            p.paragraph_format.line_spacing = 1.0
+            if p.runs and any(r._r.xpath('.//a:blip') for r in p.runs):
+                p.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+            elif p.style.name.lower() in ("image caption", "captioned figure"):
+                p.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+
+        # 5. Insert clean page break before the top beneficiaries ledger table & compact heading
+        for p in doc.paragraphs:
+            if "สรุปปลายทางผู้รับผลประโยชน์หลัก" in p.text or "Top Beneficiaries Ledger" in p.text:
+                p.paragraph_format.space_before = Pt(4)
+                p.paragraph_format.space_after = Pt(4)
+                p.paragraph_format.line_spacing = 1.0
+                if not p._p.xpath('.//w:br[@w:type="page"]'):
+                    br = OxmlElement("w:br")
+                    br.set(qn("w:type"), "page")
+                    p._p.insert(0, br)
+                break
+
+        # 6. Format table: compact cell padding, cantSplit rows, column widths, center alignment, repeat header
+        for tbl in doc.tables:
+            tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+            _apply_beneficiary_table_widths(tbl, is_landscape=True)
+            for r in tbl.rows:
+                trPr = r._tr.get_or_add_trPr()
+                if not trPr.xpath('./w:cantSplit'):
+                    trPr.append(OxmlElement('w:cantSplit'))
+                for c in r.cells:
+                    tcPr = c._tc.get_or_add_tcPr()
+                    tcMar = OxmlElement('w:tcMar')
+                    for side in ('top', 'bottom'):
+                        node = OxmlElement(f'w:{side}')
+                        node.set(qn('w:w'), '40')
+                        node.set(qn('w:type'), 'dxa')
+                        tcMar.append(node)
+                    tcPr.append(tcMar)
+                    for cp in c.paragraphs:
+                        cp.paragraph_format.space_before = Pt(1)
+                        cp.paragraph_format.space_after = Pt(1)
+                        cp.paragraph_format.line_spacing = 1.0
+            if tbl.rows:
+                header_trPr = tbl.rows[0]._tr.get_or_add_trPr()
+                if not header_trPr.xpath("./w:tblHeader"):
+                    header_trPr.append(OxmlElement("w:tblHeader"))
+
+        doc.save(str(docx_path))
+    except Exception:
+        pass
+
+
 def _ensure_docx_table_borders(docx_path: Union[str, Path]) -> None:
     """Injects explicit table borders into every table in the document XML."""
     target_path = Path(docx_path)
@@ -444,10 +598,40 @@ def convert_document(
         if not out_p.exists():
             raise FileNotFoundError(f"Expected output file not generated: {out_p}")
 
-        # Post-process docx to guarantee table grid borders on all generated tables
+        # Post-process docx to guarantee table grid borders and column width alignment
         if target_fmt == "docx":
             try:
                 _ensure_docx_table_borders(out_p)
+                if landscape:
+                    _post_process_landscape_docx(out_p)
+                else:
+                    # Also apply optimized column widths to portrait tables
+                    import docx
+                    d_doc = docx.Document(str(out_p))
+                    modified = False
+                    for tbl in d_doc.tables:
+                        if len(tbl.columns) in (7, 8):
+                            _apply_beneficiary_table_widths(tbl, is_landscape=False)
+                            modified = True
+                    if modified:
+                        d_doc.save(str(out_p))
+            except Exception:
+                pass
+
+        # Post-process landscape PDF to remove orphaned portrait title page if present
+        if target_fmt == "typst" and landscape and out_p.exists():
+            try:
+                import pypdf
+                reader = pypdf.PdfReader(out_p)
+                if len(reader.pages) > 1:
+                    first_page = reader.pages[0]
+                    # Check if first page is portrait while subsequent pages are landscape
+                    if first_page.mediabox.width < first_page.mediabox.height:
+                        writer = pypdf.PdfWriter()
+                        for p in reader.pages[1:]:
+                            writer.add_page(p)
+                        with open(out_p, "wb") as f_out:
+                            writer.write(f_out)
             except Exception:
                 pass
 
