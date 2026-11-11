@@ -329,18 +329,17 @@ class EvidenceDossierGenerator:
         lines.append("### แผนภาพแสดงเส้นทางการกระจายเงิน (Fund Dispersal Topology):")
         lines.append(self.generate_dispersal_mermaid(report, top_destinations, total_in, residual_buffer))
         lines.append("")
-        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน | มาตรการแนะนำ |")
-        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :--- |")
+        lines.append("| ลำดับ | ธนาคาร / เลขบัญชี | ชื่อบัญชีปลายทาง | ช่องทาง | ยอดเงินออก (฿) | สิทธิขอคืน (฿) | สัดส่วน |")
+        lines.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: |")
 
         for d in top_destinations:
             acct_info = f"{d.bank} {d.account_no}" if d.account_no not in ("UNKNOWN", "N/A") else d.bank
-            action_th = self._format_action_th(d.recommended_action)
             lines.append(
-                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% | {action_th} |"
+                f"| {d.rank} | {acct_info} | **{d.account_name}** | {d.channel} | ฿{d.total_drained_thb:,.2f} | **฿{d.proportional_claim_thb:,.2f}** | {d.percentage_of_victim_funds:.1f}% |"
             )
 
         lines.append(
-            f"| **รวม** | - | **รวมทั้งสิ้น {len(top_destinations)} ปลายทาง** | - | **฿{total_out:,.2f}** | **฿{total_claimable:,.2f}** | **{pct_claim:.1f}%** | **AOC 1441 / ปปง. ม.49/1** |"
+            f"| **รวม** | - | **รวมทั้งสิ้น {len(top_destinations)} ปลายทาง** | - | **฿{total_out:,.2f}** | **฿{total_claimable:,.2f}** | **{pct_claim:.1f}%** |"
         )
         lines.append("")
 
