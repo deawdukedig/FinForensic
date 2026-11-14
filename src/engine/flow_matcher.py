@@ -24,10 +24,64 @@ class FlowMatchingEngine:
         time_limit_sec: float = 5.0,
         tolerance_ratio: float = 0.05,
         mip_rel_gap: float = 0.005,
+        enable_immediate_sweep: bool = True,
+        immediate_sweep_window_sec: float = 300.0,
+        immediate_sweep_min_ratio: float = 0.90,
+        temporal_penalty_weight: float = 0.01,
     ):
         self.time_limit = time_limit_sec
         self.tolerance_ratio = tolerance_ratio  # Default 5% tolerance for residual buffer
         self.mip_rel_gap = mip_rel_gap
+        self.enable_immediate_sweep = enable_immediate_sweep
+        self.immediate_sweep_window_sec = immediate_sweep_window_sec
+        self.immediate_sweep_min_ratio = immediate_sweep_min_ratio
+        self.temporal_penalty_weight = temporal_penalty_weight
+
+    def _detect_immediate_sweep(
+        self,
+        inflow: BankTransaction,
+        candidate_outflows: List[BankTransaction],
+        max_bound: float,
+    ) -> Optional[Tuple[List[BankTransaction], str]]:
+        """
+        Detects high-velocity immediate sweep where an outflow occurs within a short window
+        (<= immediate_sweep_window_sec) and passes through >= immediate_sweep_min_ratio of the inflow.
+        """
+        if not candidate_outflows or inflow.amount <= 0:
+            return None
+
+        base_time = inflow.timestamp
+        candidates_in_window = [
+            tx for tx in candidate_outflows
+            if tx.timestamp >= base_time
+            and (tx.timestamp - base_time).total_seconds() <= self.immediate_sweep_window_sec
+            and not tx.is_reversal
+        ]
+        if not candidates_in_window:
+            return None
+
+        # Look for the earliest outbound debit transaction matching the sweep ratio
+        for tx in candidates_in_window:
+            if tx.activity == ActivityType.OUTFLOW:
+                ratio = tx.amount / inflow.amount
+                delta_sec = (tx.timestamp - base_time).total_seconds()
+                if self.immediate_sweep_min_ratio <= ratio and tx.amount <= max_bound:
+                    matched = [tx]
+                    # Check for accompanying fee transaction (<= 5 seconds)
+                    for fee_tx in candidates_in_window:
+                        if (
+                            fee_tx.activity == ActivityType.FEE
+                            and abs((fee_tx.timestamp - tx.timestamp).total_seconds()) <= 5.0
+                        ):
+                            if sum(t.amount for t in matched) + fee_tx.amount <= max_bound:
+                                matched.append(fee_tx)
+                            break
+                    total_sweep = sum(t.amount for t in matched)
+                    eff_ratio = total_sweep / inflow.amount
+                    status = f"IMMEDIATE_SWEEP_DIRECT_MATCH (Latency: {delta_sec:.0f}s, Ratio: {eff_ratio*100:.2f}%)"
+                    return matched, status
+
+        return None
 
     def solve_cluster(
         self,
@@ -37,7 +91,8 @@ class FlowMatchingEngine:
         tolerance_amt: Optional[float] = None,
     ) -> FlowMatchCluster:
         """
-        Solves the subset sum matching problem using Mixed-Integer Linear Programming.
+        Solves the subset sum matching problem using Mixed-Integer Linear Programming,
+        with an upfront Immediate Sweep Heuristic Gate for automated high-velocity sweeps.
         """
         inflow_total = sum(tx.amount for tx in inflows)
         inflow_tx_ids = [tx.tx_id for tx in inflows]
@@ -59,6 +114,40 @@ class FlowMatchingEngine:
         tol = tolerance_amt if tolerance_amt is not None else (inflow_total * self.tolerance_ratio)
         max_bound = inflow_total + tol
 
+        # 1. Immediate Sweep Heuristic Gate (Direct Match)
+        if self.enable_immediate_sweep and len(inflows) == 1:
+            sweep_match = self._detect_immediate_sweep(inflows[0], candidate_outflows, max_bound)
+            if sweep_match is not None:
+                matched_txs, sweep_status = sweep_match
+                matched_outflow_txs = [tx for tx in matched_txs if tx.activity == ActivityType.OUTFLOW]
+                matched_fee_txs = [tx for tx in matched_txs if tx.activity == ActivityType.FEE]
+                outflow_sum = sum(tx.amount for tx in matched_outflow_txs)
+                fee_sum = sum(tx.amount for tx in matched_fee_txs)
+                total_dispersed = outflow_sum + fee_sum
+                residual = max(0.0, inflow_total - total_dispersed)
+                drain_pct = min(100.0, (total_dispersed / inflow_total) * 100.0) if inflow_total > 0 else 0.0
+
+                base_time = inflows[0].timestamp
+                latencies = [max(0.0, (tx.timestamp - base_time).total_seconds() / 60.0) for tx in matched_txs]
+                avg_lat = float(np.mean(latencies)) if latencies else 0.0
+
+                terms = [f"{tx.amount:,.2f}" for tx in matched_txs]
+                terms_str = " + ".join(terms) if terms else "0.00"
+                proof_eq = f"{terms_str} = {total_dispersed:,.2f} <= {inflow_total:,.2f} (Residual: ฿{residual:,.2f}) [{sweep_status}]"
+
+                return FlowMatchCluster(
+                    cluster_id=cluster_id,
+                    inflow_tx_ids=inflow_tx_ids,
+                    inflow_total=inflow_total,
+                    outflow_tx_ids=[tx.tx_id for tx in matched_txs],
+                    outflow_total=outflow_sum,
+                    fee_total=fee_sum,
+                    residual_balance=residual,
+                    avg_latency_minutes=avg_lat,
+                    drain_percentage=drain_pct,
+                    mathematical_proof=proof_eq,
+                )
+
         # Pre-filter candidate outflows exceeding max_bound (cannot be part of any subset <= max_bound)
         filtered_candidates = [tx for tx in candidate_outflows if tx.amount <= max_bound]
         candidates = filtered_candidates if filtered_candidates else candidate_outflows
@@ -74,10 +163,8 @@ class FlowMatchingEngine:
         ], dtype=np.float64)
 
         # Normalized objective coefficients:
-        # We want to maximize total matched amount while keeping latency small
-        # In MILP minimize c^T z:
-        # c_i = -amount_i + (0.01 * latency_i)
-        c = -amounts + (0.001 * latencies_min)
+        # We want to maximize total matched amount while prioritizing earlier transactions
+        c = -amounts + (self.temporal_penalty_weight * latencies_min)
 
         # Constraint 1: sum(amount_i * z_i) <= max_bound
         # Constraint 2: sum(amount_i * z_i) >= 0

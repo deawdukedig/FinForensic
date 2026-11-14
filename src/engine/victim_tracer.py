@@ -85,6 +85,10 @@ class VictimTraceResult(BaseModel):
 
 
 THAI_NAME_SLUGS: Dict[str, str] = {
+    "วรเมธ กิตติพงษ์": "woramet_kittipong",
+    "นาย วรเมธ กิตติพงษ์": "woramet_kittipong",
+    "วรเมธ": "woramet",
+    "กิตติพงษ์": "kittipong",
     "ศิริพร ใจดี": "siriporn_jaidee",
     "ศิริพร": "siriporn",
     "ใจดี": "jaidee",
@@ -110,6 +114,10 @@ THAI_NAME_SLUGS: Dict[str, str] = {
     "นางสาว มาลี สุวรรณโชติ": "malee_suwannachot",
     "มาลี": "malee",
     "สุวรรณโชติ": "suwannachot",
+    "สุพัตรา ทวีทรัพย์": "supattra_taweesub",
+    "นาง สุพัตรา ทวีทรัพย์": "supattra_taweesub",
+    "สุพัตรา": "supattra",
+    "ทวีทรัพย์": "taweesub",
 }
 
 
@@ -186,12 +194,21 @@ class VictimFlowTracer:
         statement_file: str = "input/statement.csv",
         statement_sha256: str = "",
         tolerance_ratio: float = 0.05,
+        enable_immediate_sweep: bool = True,
+        immediate_sweep_window_sec: float = 300.0,
+        immediate_sweep_min_ratio: float = 0.90,
     ):
         self.transactions = transactions
         self.statement_file = statement_file
         self.statement_sha256 = statement_sha256
         self.tolerance_ratio = tolerance_ratio
-        self.matcher = FlowMatchingEngine(tolerance_ratio=tolerance_ratio)
+        self.enable_immediate_sweep = enable_immediate_sweep
+        self.matcher = FlowMatchingEngine(
+            tolerance_ratio=tolerance_ratio,
+            enable_immediate_sweep=enable_immediate_sweep,
+            immediate_sweep_window_sec=immediate_sweep_window_sec,
+            immediate_sweep_min_ratio=immediate_sweep_min_ratio,
+        )
 
     def find_victim_inflows(self, query: str) -> List[BankTransaction]:
         """Filters inflows matching victim name, account number, or transaction id."""
@@ -286,12 +303,31 @@ class VictimFlowTracer:
         # Process matched transactions and calculate Proportional Claims
         for (inf, candidates), cluster in zip(cluster_cand_map, matched_clusters):
             curr_matched = [t for t in candidates if t.tx_id in cluster.outflow_tx_ids]
+
+            cluster_outflows = [m for m in curr_matched if m.activity == ActivityType.OUTFLOW]
+            # If no principal outflow was matched (e.g. only a 5-10 THB fee was picked by MILP because inf.amount is small),
+            # absorb the principal into the nearest forward outbound transfer in the window
+            if not cluster_outflows and candidates:
+                outflows_only = [
+                    t for t in candidates
+                    if t.activity == ActivityType.OUTFLOW
+                    and not t.is_reversal
+                    and t.timestamp >= inf.timestamp
+                ]
+                if outflows_only:
+                    absorber = outflows_only[0]
+                    curr_matched.append(absorber)
+                    cluster.outflow_tx_ids.append(absorber.tx_id)
+                    cluster.outflow_total += absorber.amount
+                    cluster_outflows = [absorber]
+                    cluster.drain_percentage = min(100.0, ((cluster.outflow_total + cluster.fee_total) / inf.amount) * 100.0)
+                    delta_sec = (absorber.timestamp - inf.timestamp).total_seconds()
+                    cluster.mathematical_proof += f" -> [COMMINGLED_ABSORPTION (฿{absorber.amount:,.2f}, Latency: {delta_sec:.0f}s)]"
+
             for m in curr_matched:
                 if m.tx_id not in seen_matched_tx_ids:
                     seen_matched_tx_ids.add(m.tx_id)
                     all_matched_txs.append(m)
-
-            cluster_outflows = [m for m in curr_matched if m.activity == ActivityType.OUTFLOW]
             cluster_outflow_total = sum(m.amount for m in cluster_outflows)
             attr_ratio = min(1.0, inf.amount / cluster_outflow_total) if cluster_outflow_total > 0 else 1.0
 
@@ -585,6 +621,7 @@ class VictimFlowTracer:
         result: VictimTraceResult,
         case_id: str = "CASE-VICTIM-001",
         officer: str = "พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)",
+        brief: bool = True,
     ) -> str:
         """Generates court-admissible 1-page forensic evidence dossier for the victim."""
         lines = []
@@ -1400,4 +1437,29 @@ class VictimFlowTracer:
 
         doc.build(elements)
         return str(out_p.resolve())
+
+    def generate_multi_page_svg(
+        self,
+        result: VictimTraceResult,
+        output_file_path: Union[str, Path],
+        case_id: str = "CASE-VICTIM-2026",
+        officer: str = "พ.ต.ต. วิทวัส นิติวงศ์ (สอท.)",
+        agency: str = "กองบัญชาการตำรวจสืบสวนสอบสวนอาชญากรรมทางเทคโนโลยี (บช.สอท.)",
+        mask_account: bool = True,
+        package_zip: bool = False,
+    ) -> Path:
+        """
+        Generates a court-admissible multi-page Inkscape SVG document
+        with <sodipodi:namedview> and <inkscape:page> adhering to the forensic exhibit standard.
+        """
+        from src.ui.multi_page_svg_generator import MultiPageSvgGenerator
+        gen = MultiPageSvgGenerator(mask_account=mask_account)
+        return gen.generate_svg(
+            result=result,
+            output_file_path=output_file_path,
+            case_id=case_id,
+            officer=officer,
+            agency=agency,
+            package_zip=package_zip,
+        )
 
