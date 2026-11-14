@@ -1461,5 +1461,6 @@ class VictimFlowTracer:
             officer=officer,
             agency=agency,
             package_zip=package_zip,
+            transactions=self.transactions,
         )
 
