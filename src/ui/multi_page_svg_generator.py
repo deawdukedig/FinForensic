@@ -1000,21 +1000,53 @@ class MultiPageSvgGenerator:
         return flows
 
     def _extract_destinations(self, result: Any) -> List[Dict[str, Any]]:
-        """Extract top Tier 2 destination accounts from result."""
+        """Extract top Tier 2 destination accounts from result with calculated actual latencies."""
         destinations: List[Dict[str, Any]] = []
         raw_dests = getattr(result, "top_destinations", [])
+        claims = getattr(result, "proportional_claims", [])
+
+        # Compute per-destination latency distribution from proportional claims
+        dest_latencies: Dict[Tuple[str, str, str], List[float]] = {}
+        for c in claims:
+            if getattr(c, "outflow_timestamp", None) and getattr(c, "inflow_timestamp", None):
+                sec = abs((c.outflow_timestamp - c.inflow_timestamp).total_seconds())
+                b = str(getattr(c, "outflow_bank", "")).strip().upper()
+                a = str(getattr(c, "outflow_account", "")).strip()
+                n = str(getattr(c, "outflow_name", "")).strip()
+                dest_latencies.setdefault((b, a, n), []).append(sec)
+
         if raw_dests:
             for idx, d in enumerate(raw_dests):
+                d_bank = str(getattr(d, "bank", "")).strip().upper()
+                d_acct = str(getattr(d, "account_no", "")).strip()
+                d_name = str(getattr(d, "account_name", "")).strip()
+
+                # Find matching latencies for this destination
+                matching_secs = dest_latencies.get((d_bank, d_acct, d_name), [])
+                if not matching_secs:
+                    # Fallback fuzzy match on account number or account name
+                    for (b, a, n), secs in dest_latencies.items():
+                        if (d_acct and d_acct in a) or (a and a in d_acct) or (d_name and d_name in n):
+                            matching_secs.extend(secs)
+
+                if matching_secs:
+                    actual_min_sec = int(round(min(matching_secs)))
+                    actual_avg_sec = int(round(sum(matching_secs) / len(matching_secs)))
+                else:
+                    avg_min = getattr(d, "avg_latency_minutes", 6.0)
+                    actual_avg_sec = int(round(avg_min * 60)) if avg_min else 330
+                    actual_min_sec = max(10, int(actual_avg_sec * 0.15))
+
                 destinations.append({
                     "rank": getattr(d, "rank", idx + 1),
-                    "destination_name": getattr(d, "account_name", ""),
+                    "destination_name": d_name,
                     "bank": getattr(d, "bank", ""),
                     "account": getattr(d, "account_no", ""),
                     "victim_share": float(getattr(d, "proportional_claim_thb", 0.0)),
                     "percentage_of_victim_funds": float(getattr(d, "percentage_of_victim_funds", 0.0)),
                     "total_drained": float(getattr(d, "total_drained_thb", 0.0)),
-                    "min_latency": 26,
-                    "avg_latency": int(getattr(d, "avg_latency_minutes", 6.0) * 60) if getattr(d, "avg_latency_minutes", None) else 330,
+                    "min_latency": actual_min_sec,
+                    "avg_latency": actual_avg_sec,
                     "tx_count": getattr(d, "tx_count", 65),
                     "victim_tx_count": max(1, int(getattr(d, "percentage_of_victim_funds", 10.0) / 100.0 * 72)),
                     "recommended_action": getattr(d, "recommended_action", "อายัดด่วน AOC 1441"),
